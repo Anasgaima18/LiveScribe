@@ -1,35 +1,165 @@
-# LiveScribe - AI-Powered Video Conferencing Platform
+<div align="center">
 
-A real-time video conferencing web application built with the MERN stack and LiveKit API. LiveScribe features intelligent transcription, AI-powered content moderation, meeting summaries, and seamless multi-user video collaboration.
+# 📹 LiveScribe
 
-## Features
+### AI-Powered Video Conferencing Platform with Intelligent Transcription
 
-✅ **User Authentication** - JWT-based secure authentication  
-✅ **Video Conferencing** - One-to-one and group video calls using LiveKit  
-✅ **Real-time Chat** - Built-in chat functionality  
-✅ **Voice Transcription** - Automatic speech-to-text per user  
-✅ **AI Content Moderation** - OpenAI GPT-4 powered threat detection with confidence scoring  
-✅ **AI Summarization** - OpenAI-powered meeting summaries  
-✅ **User Dashboard** - View all users and initiate calls  
-✅ **Transcript Management** - View, store, and analyze call transcripts  
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen)](https://nodejs.org/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-8.0-green)](https://www.mongodb.com/)
+[![React](https://img.shields.io/badge/React-18.2-blue)](https://reactjs.org/)
+[![LiveKit](https://img.shields.io/badge/LiveKit-2.0-orange)](https://livekit.io/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4-purple)](https://openai.com/)
 
-## Tech Stack
+[Features](#-features) • [Demo](#-demo) • [Installation](#-installation) • [Usage](#-usage) • [API Documentation](#-api-documentation) • [Contributing](#-contributing)
+
+---
+
+</div>
+
+## 📖 About
+
+**LiveScribe** is a modern, enterprise-grade video conferencing platform that combines real-time video communication with AI-powered features. Built with the MERN stack and LiveKit infrastructure, it offers intelligent transcription, automated content moderation, meeting summaries, and seamless collaboration tools.
+
+### 🎯 Key Highlights
+
+- 🎥 **HD Video Calls** - Crystal-clear one-to-one and group video conferencing
+- 🤖 **AI-Powered** - Intelligent content moderation and meeting summarization
+- 📝 **Live Transcription** - Real-time speech-to-text with per-user tracking
+- 🔒 **Enterprise Security** - JWT authentication, encrypted communications, CORS protection
+- 🌐 **Multi-language Support** - Translation capabilities for global teams
+- 📊 **Admin Dashboard** - Comprehensive analytics and monitoring tools
+- ⚡ **High Performance** - Built with Vite for optimized load times
+- 🎨 **Modern UI/UX** - Clean, intuitive interface with responsive design
+
+---
+
+## ✨ Features
+
+---
+
+## ✨ Features
+
+### 🔐 Core Functionality
+
+- **User Authentication & Authorization**
+  - JWT-based secure authentication
+  - Password hashing with bcrypt
+  - Role-based access control
+  - Session management
+
+- **Video Conferencing**
+  - One-to-one video calls
+  - Multi-participant group calls
+  - HD video quality powered by LiveKit
+  - Adaptive bitrate streaming
+  - Camera and microphone controls
+
+- **Real-time Communication**
+  - Built-in text chat
+  - Socket.IO integration
+  - Low-latency messaging
+  - Typing indicators
+
+### 🤖 AI-Powered Features
+
+- **Intelligent Content Moderation**
+  - OpenAI GPT-4 powered threat detection
+  - Real-time transcript analysis
+  - Confidence scoring (0-100%)
+  - Multi-category classification:
+    - Violence & weapons detection
+    - Harassment & hate speech
+    - Threats & intimidation
+    - Sexual content filtering
+    - Self-harm prevention
+  - Automated alert generation
+  - Email notifications for critical threats
+
+- **AI Meeting Summarization**
+  - Automatic meeting summaries
+  - Key points extraction
+  - Action items identification
+  - Powered by OpenAI GPT models
+
+- **Voice Transcription**
+  - Real-time speech-to-text
+  - Per-user transcript tracking
+  - Timestamp synchronization
+  - Searchable transcript history
+
+### 🌟 Advanced Features
+
+- **Multi-language Translation** *(15+ languages)*
+  - Google Translate API integration
+  - Real-time translation
+  - Language auto-detection
+
+- **Cloud Storage Integration**
+  - AWS S3 support
+  - Azure Blob Storage support
+  - Cloudinary integration
+  - Automatic recording uploads
+
+- **Admin Dashboard**
+  - User management
+  - Call analytics and statistics
+  - Real-time monitoring
+  - Threat alert management
+  - System health metrics
+
+- **Dashboard & Analytics**
+  - User directory
+  - Call history
+  - Transcript management
+  - Alert notifications
+  - Activity tracking
+
+---
+
+## 🏗️ Tech Stack
+
+---
+
+## 🏗️ Tech Stack
 
 ### Backend
-- Node.js & Express.js
-- MongoDB (Mongoose)
-- JWT Authentication
-- LiveKit Server SDK
-- OpenAI API
+| Technology | Version | Purpose |
+|-----------|---------|---------|
+| **Node.js** | 18+ | Runtime environment |
+| **Express.js** | 4.21.2 | Web framework |
+| **MongoDB** | 8.19.2 | Database |
+| **Mongoose** | 8.9.5 | ODM |
+| **JWT** | 9.0.2 | Authentication |
+| **LiveKit Server SDK** | 2.14.0 | Video infrastructure |
+| **OpenAI API** | 4.76.2 | AI capabilities |
+| **Socket.IO** | 4.8.1 | Real-time communication |
+| **bcrypt** | 2.4.3 | Password hashing |
+| **Helmet** | 7.2.0 | Security middleware |
+| **Express Rate Limit** | 7.5.1 | Rate limiting |
+| **Winston** | 3.18.0 | Logging |
 
 ### Frontend
-- React.js (with Vite)
-- LiveKit Components React
-- React Router
-- Axios
-- Modern CSS
+| Technology | Version | Purpose |
+|-----------|---------|---------|
+| **React** | 18.3.1 | UI framework |
+| **Vite** | 7.1.12 | Build tool |
+| **LiveKit Components** | 2.15.13 | Video UI components |
+| **React Router** | 7.1.3 | Routing |
+| **Axios** | 1.7.9 | HTTP client |
+| **Socket.IO Client** | 4.8.1 | Real-time client |
 
-## Prerequisites
+### Infrastructure & DevOps
+- **LiveKit Cloud** - Video infrastructure
+- **MongoDB Atlas** - Cloud database
+- **OpenRouter/OpenAI** - AI services
+- **AWS S3** - File storage (optional)
+- **Azure Blob** - File storage (optional)
+- **Cloudinary** - Media storage (optional)
+
+---
+
+## 📋 Prerequisites
 
 Before running this application, make sure you have:
 
@@ -38,294 +168,674 @@ Before running this application, make sure you have:
 - LiveKit account and credentials
 - OpenAI API key
 
-## Installation
+---
 
-### 1. Clone the repository
+## 📋 Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+- **Node.js** (v16.0.0 or higher) - [Download](https://nodejs.org/)
+- **npm** (v7.0.0 or higher) or **yarn** (v1.22.0 or higher)
+- **MongoDB** (v5.0 or higher) - [Download](https://www.mongodb.com/try/download/community) or use [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
+- **Git** - [Download](https://git-scm.com/downloads)
+
+### Required API Keys
+
+You'll need to create accounts and obtain API keys from:
+
+1. **LiveKit** - [Sign up](https://cloud.livekit.io) (Free tier available)
+2. **OpenAI** or **OpenRouter** - [OpenAI](https://platform.openai.com) | [OpenRouter](https://openrouter.ai)
+3. **MongoDB Atlas** (optional) - [Sign up](https://www.mongodb.com/cloud/atlas/register) (Free tier available)
+
+---
+
+## 🚀 Installation
+
+### 1️⃣ Clone the Repository
 
 ```bash
-cd D:\Projects\livekit-video-call
+git clone https://github.com/Anasgaima18/LiveScribe.git
+cd LiveScribe
 ```
 
-### 2. Backend Setup
+### 2️⃣ Backend Setup
+
+#### Install Dependencies
 
 ```bash
 cd backend
 npm install
 ```
 
-Create a `.env` file in the backend directory:
+#### Configure Environment Variables
+
+Create a `.env` file in the `backend` directory:
 
 ```env
+# Server Configuration
 PORT=5000
 NODE_ENV=development
 
-# MongoDB
-MONGODB_URI=mongodb://localhost:27017/livekit-video-call
+# Database
+MONGODB_URI=mongodb://localhost:27017/livescribe
+# Or use MongoDB Atlas:
+# MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/livescribe?retryWrites=true&w=majority
 
-# JWT
-JWT_SECRET=your_super_secret_jwt_key_change_this
+# JWT Configuration
+JWT_SECRET=your_super_secret_jwt_key_minimum_32_characters_long
 JWT_EXPIRE=7d
 
-# LiveKit (Get from https://cloud.livekit.io)
+# LiveKit Configuration
+# Get these from https://cloud.livekit.io/projects
 LIVEKIT_API_KEY=your_livekit_api_key
 LIVEKIT_API_SECRET=your_livekit_api_secret
-LIVEKIT_URL=wss://your-project.livekit.cloud
+LIVEKIT_URL=wss://your-project-id.livekit.cloud
 
-# OpenAI
-OPENAI_API_KEY=your_openai_api_key
+# OpenAI Configuration
+# Option 1: OpenAI (https://platform.openai.com/api-keys)
+OPENAI_API_KEY=sk-...
+
+# Option 2: OpenRouter (https://openrouter.ai/keys)
+# OPENAI_API_KEY=sk-or-v1-...
+
+# Email Configuration (Optional - for alert notifications)
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASSWORD=your-app-specific-password
+EMAIL_FROM=noreply@livescribe.com
+
+# Cloud Storage (Optional)
+AWS_ACCESS_KEY_ID=your_aws_access_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+AWS_REGION=us-east-1
+AWS_S3_BUCKET=your-bucket-name
+
+AZURE_STORAGE_ACCOUNT=your_storage_account
+AZURE_STORAGE_KEY=your_storage_key
+AZURE_CONTAINER=your-container-name
+
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
 
 # CORS
 FRONTEND_URL=http://localhost:3000
 ```
 
-### 3. Frontend Setup
+### 3️⃣ Frontend Setup
+
+#### Install Dependencies
 
 ```bash
 cd ../frontend
 npm install
 ```
 
-Create a `.env` file in the frontend directory:
+#### Configure Environment Variables
+
+Create a `.env` file in the `frontend` directory:
 
 ```env
+# API Configuration
 VITE_API_URL=http://localhost:5000/api
-VITE_LIVEKIT_URL=wss://your-project.livekit.cloud
+
+# LiveKit Configuration
+VITE_LIVEKIT_URL=wss://your-project-id.livekit.cloud
 ```
 
-## Getting API Keys
+---
 
-### LiveKit Setup
-1. Go to [LiveKit Cloud](https://cloud.livekit.io)
-2. Create a free account
-3. Create a new project
-4. Copy your API Key, Secret, and WebSocket URL
-5. Add them to your backend `.env` file
+## 🎮 Usage
 
-### OpenAI Setup
-1. Go to [OpenAI Platform](https://platform.openai.com)
-2. Create an account or sign in
-3. Navigate to API Keys section
-4. Create a new API key
-5. Add it to your backend `.env` file
+### Development Mode
 
-### MongoDB Setup
-
-**Option 1: Local MongoDB**
-```bash
-# Install MongoDB locally and start the service
-mongod
-```
-
-**Option 2: MongoDB Atlas (Cloud)**
-1. Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
-2. Create a free account
-3. Create a cluster
-4. Get your connection string
-5. Update `MONGODB_URI` in your `.env` file
-
-## Running the Application
-
-### Start Backend Server
+#### Start the Backend Server
 
 ```bash
 cd backend
 npm run dev
 ```
 
-Backend will run on `http://localhost:5000`
+The backend will start on `http://localhost:5000`
 
-### Start Frontend Development Server
+#### Start the Frontend Development Server
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-Frontend will run on `http://localhost:3000`
+The frontend will start on `http://localhost:3000`
 
-## Usage Guide
+### Production Build
 
-### 1. Register an Account
-- Navigate to `http://localhost:3000/register`
-- Fill in your name, email, and password
-- Click "Register"
-
-### 2. Login
-- Navigate to `http://localhost:3000/login`
-- Enter your credentials
-- Click "Login"
-
-### 3. Dashboard
-- View all registered users
-- Select one or multiple users
-- Click "Start Video Call" to initiate a call
-
-### 4. Video Call Room
-- Join the video call
-- Use camera and microphone
-- Click "Show Transcripts" to view the transcript panel
-- View real-time transcripts organized by user
-- Check alerts for any flagged content
-- Click "Generate Summary" to create an AI summary of the call
-- Click "Leave Call" to end the session
-
-### 5. Transcription (Manual Testing)
-
-To test transcription functionality, you can manually add transcripts via API:
+#### Build Frontend
 
 ```bash
-# Example: Add a transcript segment
-curl -X POST http://localhost:5000/api/calls/{callId}/transcripts \
-  -H "Authorization: Bearer {your_token}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "segments": [{
-      "text": "Hello, this is a test transcript",
-      "startTime": 0,
-      "endTime": 5
-    }]
-  }'
+cd frontend
+npm run build
 ```
 
-**Note:** In a production environment, you would integrate with a Speech-to-Text service (like OpenAI Whisper, Google Speech-to-Text, or LiveKit's transcription) to automatically transcribe audio in real-time.
+#### Start Backend in Production
 
-## API Endpoints
-
-### Authentication
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - Login user
-- `GET /api/auth/users` - Get all users (protected)
-- `GET /api/auth/me` - Get current user (protected)
-
-### LiveKit
-- `GET /api/livekit/token` - Generate room access token (protected)
-
-### Calls
-- `POST /api/calls` - Create new call (protected)
-- `GET /api/calls` - Get user's calls (protected)
-- `PUT /api/calls/:callId/end` - End a call (protected)
-- `POST /api/calls/:callId/transcripts` - Save transcript (protected)
-- `GET /api/calls/:callId/transcripts` - Get transcripts (protected)
-- `POST /api/calls/:callId/summarize` - Generate AI summary (protected)
-- `GET /api/calls/:callId/alerts` - Get alerts (protected)
-
-## Project Structure
-
+```bash
+cd backend
+NODE_ENV=production npm start
 ```
-livekit-video-call/
-├── backend/
-│   ├── config/
-│   │   └── db.js
-│   ├── controllers/
-│   │   ├── authController.js
-│   │   ├── callController.js
-│   │   └── livekitController.js
-│   ├── middleware/
-│   │   └── auth.js
-│   ├── models/
-│   │   ├── User.js
-│   │   ├── Call.js
-│   │   ├── Transcript.js
-│   │   └── Alert.js
-│   ├── routes/
-│   │   ├── authRoutes.js
-│   │   ├── callRoutes.js
-│   │   └── livekitRoutes.js
-│   ├── utils/
-│   │   └── threatDetection.js
-│   ├── .env
-│   ├── package.json
-│   └── server.js
-├── frontend/
-│   ├── public/
-│   │   └── index.html
-│   ├── src/
-│   │   ├── components/
-│   │   │   └── TranscriptPanel.js
-│   │   ├── context/
-│   │   │   └── AuthContext.js
-│   │   ├── pages/
-│   │   │   ├── Dashboard.js
-│   │   │   ├── Login.js
-│   │   │   ├── Register.js
-│   │   │   └── VideoRoom.js
-│   │   ├── styles/
-│   │   │   ├── Auth.css
-│   │   │   ├── Dashboard.css
-│   │   │   ├── TranscriptPanel.css
-│   │   │   └── VideoRoom.css
-│   │   ├── utils/
-│   │   │   └── api.js
-│   │   ├── App.js
-│   │   ├── index.js
-│   │   └── index.css
-│   ├── .env
-│   └── package.json
-└── README.md
-```
-
-## Threat Detection
-
-The system automatically scans transcripts for threatening or inappropriate words across multiple severity levels:
-
-- **Critical**: Violence, weapons, death threats
-- **High**: Serious threats, abuse, assault
-- **Medium**: Harassment, discrimination, fraud
-- **Low**: General inappropriate language
-
-Alerts are automatically generated and stored when flagged content is detected.
-
-## Security Features
-
-- JWT-based authentication
-- Password hashing with bcrypt
-- HTTPS encryption (recommended for production)
-- Protected API routes
-- CORS configuration
-- Input validation
-- Secure credential storage via environment variables
-
-## Future Enhancements
-
-✅ **Real-time Translation** - Multi-language support (15+ languages)  
-✅ **Cloud Storage** - AWS/Azure/Cloudinary support for recordings  
-✅ **Admin Dashboard** - Comprehensive monitoring and analytics  
-✅ **AI Content Moderation** - Advanced threat detection using OpenAI GPT-4  
-✅ **Screen Sharing** - Share your screen during calls  
-✅ **Email Notifications** - Alert system for security events  
-- [ ] Chat history persistence
-- [ ] Video recording playback
-
-## Troubleshooting
-
-### Backend won't start
-- Check if MongoDB is running
-- Verify all environment variables are set correctly
-- Ensure port 5000 is not in use
-
-### Frontend won't connect
-- Verify backend is running
-- Check CORS settings in backend
-- Ensure proxy is configured in frontend package.json
-
-### Video call not working
-- Verify LiveKit credentials are correct
-- Check LiveKit URL format (should start with wss://)
-- Ensure camera/microphone permissions are granted in browser
-
-### OpenAI summarization fails
-- Verify OpenAI API key is valid
-- Check you have sufficient API credits
-- Ensure transcripts exist before generating summary
-
-## License
-
-This project is open source and available under the MIT License.
-
-## Support
-
-For issues and questions, please create an issue in the repository or contact the development team.
 
 ---
 
-Built with ❤️ using MERN Stack + LiveKit + OpenAI
+## 📱 Quick Start Guide
+
+### 1. Create an Account
+
+1. Navigate to `http://localhost:3000/register`
+2. Fill in your details:
+   - Full Name
+   - Email Address
+   - Password (minimum 8 characters)
+3. Click **Register**
+
+### 2. Sign In
+
+1. Go to `http://localhost:3000/login`
+2. Enter your credentials
+3. Click **Login**
+
+### 3. Start a Video Call
+
+1. From the **Dashboard**, view all registered users
+2. Select one or multiple participants
+3. Click **Start Video Call**
+4. Grant camera and microphone permissions when prompted
+
+### 4. During a Call
+
+- **Toggle Camera**: Turn video on/off
+- **Toggle Microphone**: Mute/unmute audio
+- **View Transcripts**: Click "Show Transcripts" to see real-time transcription
+- **Generate Summary**: Click "Generate Summary" for AI-powered meeting notes
+- **Monitor Alerts**: View content moderation alerts in the transcript panel
+- **Leave Call**: Click "Leave Call" to exit
+
+---
+
+## 🔧 API Documentation
+
+### Authentication Endpoints
+
+#### Register User
+```http
+POST /api/auth/register
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "securepassword123"
+}
+```
+
+#### Login User
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "email": "john@example.com",
+  "password": "securepassword123"
+}
+```
+
+#### Get All Users
+```http
+GET /api/auth/users
+Authorization: Bearer <token>
+```
+
+#### Get Current User
+```http
+GET /api/auth/me
+Authorization: Bearer <token>
+```
+
+### LiveKit Endpoints
+
+#### Generate Room Token
+```http
+GET /api/livekit/token?roomName=room123&participantName=John
+Authorization: Bearer <token>
+```
+
+### Call Endpoints
+
+#### Create Call
+```http
+POST /api/calls
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "participants": ["userId1", "userId2"],
+  "roomName": "meeting-room-123"
+}
+```
+
+#### Get User Calls
+```http
+GET /api/calls
+Authorization: Bearer <token>
+```
+
+#### End Call
+```http
+PUT /api/calls/:callId/end
+Authorization: Bearer <token>
+```
+
+#### Save Transcript
+```http
+POST /api/calls/:callId/transcripts
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "userId": "user123",
+  "userName": "John Doe",
+  "segments": [
+    {
+      "text": "Hello everyone",
+      "startTime": 0,
+      "endTime": 2.5
+    }
+  ]
+}
+```
+
+#### Get Transcripts
+```http
+GET /api/calls/:callId/transcripts
+Authorization: Bearer <token>
+```
+
+#### Generate AI Summary
+```http
+POST /api/calls/:callId/summarize
+Authorization: Bearer <token>
+```
+
+#### Get Alerts
+```http
+GET /api/calls/:callId/alerts
+Authorization: Bearer <token>
+```
+
+---
+
+## 📁 Project Structure
+
+```
+LiveScribe/
+├── 📂 backend/                    # Backend application
+│   ├── 📂 config/                # Configuration files
+│   │   ├── db.js                 # MongoDB connection
+│   │   ├── logger.js             # Winston logger setup
+│   │   └── socket.js             # Socket.IO configuration
+│   ├── 📂 controllers/           # Request handlers
+│   │   ├── authController.js     # Authentication logic
+│   │   ├── callController.js     # Call management
+│   │   ├── livekitController.js  # LiveKit token generation
+│   │   └── adminController.js    # Admin operations
+│   ├── 📂 middleware/            # Custom middleware
+│   │   ├── auth.js               # JWT verification
+│   │   ├── errorHandler.js       # Error handling
+│   │   └── validation.js         # Input validation
+│   ├── 📂 models/                # Database schemas
+│   │   ├── User.js               # User model
+│   │   ├── Call.js               # Call model
+│   │   ├── Transcript.js         # Transcript model
+│   │   ├── Alert.js              # Alert model
+│   │   └── Admin.js              # Admin model
+│   ├── 📂 routes/                # API routes
+│   │   ├── authRoutes.js         # /api/auth/*
+│   │   ├── callRoutes.js         # /api/calls/*
+│   │   ├── livekitRoutes.js      # /api/livekit/*
+│   │   ├── adminRoutes.js        # /api/admin/*
+│   │   └── translationRoutes.js  # /api/translate/*
+│   ├── 📂 utils/                 # Utility functions
+│   │   ├── threatDetection.js    # AI content moderation
+│   │   ├── emailService.js       # Email notifications
+│   │   ├── translationService.js # Translation API
+│   │   ├── cloudStorage.js       # Cloud storage integration
+│   │   └── errors.js             # Custom error classes
+│   ├── 📄 .env                   # Environment variables
+│   ├── 📄 package.json           # Dependencies
+│   └── 📄 server.js              # Entry point
+│
+├── 📂 frontend/                   # Frontend application
+│   ├── 📂 src/
+│   │   ├── 📂 components/        # React components
+│   │   │   └── TranscriptPanel.js
+│   │   ├── 📂 context/           # React context
+│   │   │   └── AuthContext.js    # Authentication state
+│   │   ├── 📂 pages/             # Page components
+│   │   │   ├── Login.jsx         # Login page
+│   │   │   ├── Register.jsx      # Registration page
+│   │   │   ├── Dashboard.jsx     # User dashboard
+│   │   │   ├── VideoRoom.jsx     # Video call room
+│   │   │   └── AdminDashboard.jsx # Admin panel
+│   │   ├── 📂 styles/            # CSS modules
+│   │   │   ├── Auth.css
+│   │   │   ├── Dashboard.css
+│   │   │   ├── VideoRoom.css
+│   │   │   ├── TranscriptPanel.css
+│   │   │   └── AdminDashboard.css
+│   │   ├── 📂 utils/             # Utility functions
+│   │   │   └── api.js            # Axios configuration
+│   │   ├── 📄 App.js             # Main component
+│   │   ├── 📄 index.js           # Entry point
+│   │   └── 📄 index.css          # Global styles
+│   ├── 📄 .env                   # Environment variables
+│   ├── 📄 package.json           # Dependencies
+│   └── 📄 vite.config.js         # Vite configuration
+│
+├── 📄 README.md                   # Documentation
+├── 📄 QUICKSTART.md              # Quick start guide
+├── 📄 QUICK_REFERENCE.md         # API reference
+├── 📄 .gitignore                 # Git ignore rules
+└── 📄 package.json               # Root package (optional)
+```
+
+---
+
+## 🔒 Security Features
+
+- **🔐 Authentication & Authorization**
+  - JSON Web Tokens (JWT) for stateless authentication
+  - Password hashing using bcrypt (10 rounds)
+  - Token expiration and refresh mechanisms
+  - Protected routes with middleware
+
+- **🛡️ Security Middleware**
+  - **Helmet.js** - Sets secure HTTP headers
+  - **CORS** - Cross-Origin Resource Sharing configuration
+  - **Rate Limiting** - 20 requests per 15 minutes per IP
+  - **Input Sanitization** - HTML sanitization to prevent XSS
+  - **MongoDB Injection Protection** - Query sanitization
+
+- **📧 Alert System**
+  - Real-time threat detection notifications
+  - Email alerts for critical content
+  - Admin dashboard for monitoring
+  - Configurable alert thresholds
+
+- **🔒 Data Protection**
+  - Environment variable isolation
+  - Encrypted database connections
+  - HTTPS enforcement (production)
+  - Secure credential storage
+
+---
+
+## 🧪 Testing
+
+### Manual Testing
+
+#### Test Threat Detection
+
+```bash
+cd backend
+node -e "import('dotenv').then(d => d.default.config()); setTimeout(() => import('./utils/threatDetection.js').then(async (module) => { const result = await module.detectThreats('I will harm you'); console.log(JSON.stringify(result, null, 2)); }), 100)"
+```
+
+Expected output:
+```json
+{
+  "hasThreats": true,
+  "severity": "critical",
+  "detectedWords": ["harm"],
+  "categories": ["violence", "threats"],
+  "confidence": 95,
+  "explanation": "The text contains explicit violent threats..."
+}
+```
+
+### API Testing with curl
+
+```bash
+# Register a user
+curl -X POST http://localhost:5000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Test User","email":"test@example.com","password":"testpass123"}'
+
+# Login
+curl -X POST http://localhost:5000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"testpass123"}'
+```
+
+---
+
+## 🚀 Deployment
+
+### Backend Deployment (Railway/Render)
+
+1. Push code to GitHub
+2. Connect repository to Railway or Render
+3. Set environment variables
+4. Deploy automatically
+
+### Frontend Deployment (Vercel/Netlify)
+
+1. Build the frontend: `npm run build`
+2. Deploy the `dist` folder
+3. Set environment variables
+4. Configure rewrites for SPA routing
+
+### Environment-Specific Configuration
+
+**Production Backend .env:**
+```env
+NODE_ENV=production
+MONGODB_URI=mongodb+srv://...
+FRONTEND_URL=https://your-app.vercel.app
+```
+
+**Production Frontend .env:**
+```env
+VITE_API_URL=https://your-backend.railway.app/api
+VITE_LIVEKIT_URL=wss://your-project.livekit.cloud
+```
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+#### ❌ Backend Won't Start
+
+**Problem**: `Error: connect ECONNREFUSED 127.0.0.1:27017`
+
+**Solution**:
+- Ensure MongoDB is running: `mongod` or use MongoDB Atlas
+- Check `MONGODB_URI` in `.env`
+- Verify MongoDB connection string format
+
+---
+
+#### ❌ Frontend Can't Connect to Backend
+
+**Problem**: `Network Error` or CORS errors
+
+**Solution**:
+- Verify backend is running on port 5000
+- Check `VITE_API_URL` in frontend `.env`
+- Ensure `FRONTEND_URL` in backend `.env` matches frontend URL
+- Clear browser cache and restart dev server
+
+---
+
+#### ❌ Video Call Not Working
+
+**Problem**: "Failed to connect to room" or camera not showing
+
+**Solution**:
+- Verify LiveKit credentials are correct
+- Check `LIVEKIT_URL` format: must start with `wss://`
+- Grant camera/microphone permissions in browser
+- Test LiveKit connection at https://livekit.io/playground
+
+---
+
+#### ❌ OpenAI API Errors
+
+**Problem**: `401 Unauthorized` or `Invalid API key`
+
+**Solution**:
+- Verify `OPENAI_API_KEY` in backend `.env`
+- For OpenRouter: ensure key starts with `sk-or-v1-`
+- Check API credits/billing
+- Test API key: `curl https://api.openai.com/v1/models -H "Authorization: Bearer YOUR_KEY"`
+
+---
+
+#### ❌ Rate Limit Errors
+
+**Problem**: `429 Too Many Requests`
+
+**Solution**:
+- Wait 15 minutes for rate limit reset
+- Increase limit in `server.js`:
+  ```javascript
+  max: 20, // Increase this number
+  windowMs: 15 * 60 * 1000
+  ```
+
+---
+
+## 🛣️ Roadmap
+
+### Completed ✅
+- [x] Core video conferencing
+- [x] User authentication
+- [x] Real-time transcription
+- [x] AI content moderation (GPT-4)
+- [x] AI meeting summaries
+- [x] Multi-language translation
+- [x] Cloud storage integration
+- [x] Admin dashboard
+- [x] Email notifications
+- [x] Screen sharing support
+
+### In Progress 🚧
+- [ ] Mobile application (React Native)
+- [ ] WebRTC fallback for unsupported browsers
+- [ ] Advanced analytics dashboard
+
+### Planned 📅
+- [ ] End-to-end encryption
+- [ ] Chat history persistence
+- [ ] Video recording playback
+- [ ] Breakout rooms
+- [ ] Virtual backgrounds
+- [ ] Whiteboard integration
+- [ ] Calendar integration (Google, Outlook)
+- [ ] SSO/SAML authentication
+- [ ] Webhooks for integrations
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Please follow these steps:
+
+1. **Fork the repository**
+2. **Create a feature branch**
+   ```bash
+   git checkout -b feature/AmazingFeature
+   ```
+3. **Commit your changes**
+   ```bash
+   git commit -m 'Add some AmazingFeature'
+   ```
+4. **Push to the branch**
+   ```bash
+   git push origin feature/AmazingFeature
+   ```
+5. **Open a Pull Request**
+
+### Development Guidelines
+
+- Follow existing code style
+- Write meaningful commit messages
+- Add comments for complex logic
+- Update documentation for new features
+- Test thoroughly before submitting PR
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+```
+MIT License
+
+Copyright (c) 2025 LiveScribe
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+```
+
+---
+
+## 👥 Authors
+
+- **Anasgaima18** - *Initial work* - [GitHub](https://github.com/Anasgaima18)
+
+---
+
+## 🙏 Acknowledgments
+
+- [LiveKit](https://livekit.io/) for excellent video infrastructure
+- [OpenAI](https://openai.com/) for GPT-4 API
+- [MongoDB](https://www.mongodb.com/) for database solutions
+- [React](https://reactjs.org/) team for the amazing framework
+- All contributors who help improve this project
+
+---
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/Anasgaima18/LiveScribe/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Anasgaima18/LiveScribe/discussions)
+- **Email**: support@livescribe.com (if configured)
+
+---
+
+## 📊 Project Stats
+
+![GitHub stars](https://img.shields.io/github/stars/Anasgaima18/LiveScribe?style=social)
+![GitHub forks](https://img.shields.io/github/forks/Anasgaima18/LiveScribe?style=social)
+![GitHub watchers](https://img.shields.io/github/watchers/Anasgaima18/LiveScribe?style=social)
+
+---
+
+<div align="center">
+
+### 🌟 Star this repository if you find it helpful!
+
+Made with ❤️ using **MERN Stack** + **LiveKit** + **OpenAI**
+
+[⬆ Back to Top](#-livescribe)
+
+</div>
