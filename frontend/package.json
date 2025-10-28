@@ -1,0 +1,36 @@
+{
+  "name": "livescribe-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@livekit/components-react": "^2.0.0",
+    "@livekit/components-styles": "^1.0.12",
+    "axios": "^1.6.2",
+    "livekit-client": "^2.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.3",
+    "vite": "^7.1.12"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

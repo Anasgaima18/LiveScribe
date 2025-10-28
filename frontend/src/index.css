@@ -1,0 +1,68 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #f2f2f7;
+  color: #1d1d1f;
+  letter-spacing: -0.3px;
+}
+
+code {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 14px;
+  letter-spacing: -0.1px;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* iOS-style scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Smooth transitions */
+button, input, select, textarea {
+  font-family: inherit;
+  letter-spacing: inherit;
+}
+
+/* iOS-style focus rings */
+input:focus,
+textarea:focus,
+button:focus {
+  outline: none;
+}
+
+/* Disable text selection on buttons */
+button {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* iOS-style tap highlight */
+* {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+}
