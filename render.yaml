@@ -1,0 +1,54 @@
+services:
+  - type: web
+    name: livescribe-backend
+    env: docker
+    repo: https://github.com/Anasgaima18/LiveScribe
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    healthCheckPath: /api/health
+    autoDeploy: true
+    plan: free
+    envVars:
+      - fromGroup: livescribe-backend
+
+  - type: web
+    name: livescribe-frontend
+    env: docker
+    repo: https://github.com/Anasgaima18/LiveScribe
+    dockerfilePath: frontend/Dockerfile
+    dockerContext: frontend
+    buildCommand: npm run build
+    staticPublishPath: dist
+    plan: free
+    envVars:
+      - fromGroup: livescribe-frontend
+
+envVarGroups:
+  - name: livescribe-backend
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGODB_URI
+        sync: false # Set in dashboard
+      - key: JWT_SECRET
+        sync: false # Set in dashboard
+      - key: LIVEKIT_API_KEY
+        sync: false # Set in dashboard
+      - key: LIVEKIT_API_SECRET
+        sync: false # Set in dashboard
+      - key: LIVEKIT_URL
+        sync: false # Set in dashboard
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false # e.g. https://{frontend-service-name}.onrender.com
+      # Add all others such as cloud and email configs as shown in README
+
+  - name: livescribe-frontend
+    envVars:
+      - key: VITE_API_URL
+        sync: false # Set this to the Render backend URL endpoint
+      - key: VITE_LIVEKIT_URL
+        sync: false

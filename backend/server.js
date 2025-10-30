@@ -173,6 +173,15 @@ app.get('/api', (req, res) => {
   });
 });
 
+// Root path welcome handler
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: "success",
+    message: "Welcome to the LiveScribe API!",
+    documentation: "/api-docs"
+  });
+});
+
 // Handle 404
 app.use(notFound);
 
