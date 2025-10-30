@@ -77,19 +77,17 @@ const VideoRoom = () => {
   return (
     <div className="video-room-container">
       <LiveKitRoom
-        video
-        audio
         token={token}
         serverUrl={import.meta.env.VITE_LIVEKIT_URL}
         data-lk-theme="default"
         style={{ height: '100vh' }}
         onDisconnected={handleDisconnect}
+        onError={(e) => console.error('LiveKit error:', e)}
         connectOptions={{
           autoSubscribe: true,
           publishDefaults: {
+            // Defaults used when publishing via UI controls inside VideoConference
             videoSimulcastLayers: 'hq',
-            video: true,
-            audio: true,
           },
         }}
       >
