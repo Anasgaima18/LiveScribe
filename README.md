@@ -36,10 +36,6 @@
 
 ## ✨ Features
 
----
-
-## ✨ Features
-
 ### 🔐 Core Functionality
 
 - **User Authentication & Authorization**
@@ -116,11 +112,6 @@
   - Activity tracking
 
 ---
-
-## 🏗️ Tech Stack
-
----
-
 ## 🏗️ Tech Stack
 
 ### Backend
