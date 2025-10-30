@@ -3,6 +3,7 @@ import Transcript from '../models/Transcript.js';
 import Alert from '../models/Alert.js';
 import { detectThreats } from '../utils/threatDetection.js';
 import OpenAI from 'openai';
+import { sendToUser } from '../config/socket.js';
 
 // Lazy-load OpenAI client to avoid startup crash if API key is missing
 let openai = null;
@@ -53,6 +54,19 @@ export const createCall = async (req, res) => {
       participants: [{ userId: req.user._id }],
       status: 'active'
     });
+
+    // Notify other participants
+    if (Array.isArray(participants)) {
+      participants.forEach(({ userId }) => {
+        if (userId && userId.toString() !== req.user._id.toString()) {
+          sendToUser(userId.toString(), 'call:invitation', {
+            from: req.user,
+            roomId,
+            callId: call._id
+          });
+        }
+      });
+    }
 
     res.status(201).json(call);
   } catch (error) {
