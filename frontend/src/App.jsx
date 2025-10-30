@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext.jsx';
+import { AuthProvider } from './context/AuthContext.jsx';
 import { SocketProvider } from './context/SocketContext.jsx';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
@@ -76,10 +76,10 @@ function App() {
 
 export default function AppWrapper() {
   return (
-    <SocketProvider>
-      <AuthProvider>
+    <AuthProvider>
+      <SocketProvider>
         <App />
-      </AuthProvider>
-    </SocketProvider>
-  )
+      </SocketProvider>
+    </AuthProvider>
+  );
 }
