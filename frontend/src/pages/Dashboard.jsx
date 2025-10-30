@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useSocket } from '../context/SocketContext.jsx';
 import api from '../utils/api';
 import '../styles/Dashboard.css';
 
@@ -12,10 +13,21 @@ const Dashboard = () => {
   
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const socket = useSocket();
 
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handler = (data) => {
+      console.log('[SOCKET] Received call:invitation', data);
+      alert(`Incoming call from ${data.from?.name || 'unknown'}! Join room: ${data.roomId}`);
+    };
+    socket.on('call:invitation', handler);
+    return () => socket.off('call:invitation', handler);
+  }, [socket]);
 
   const fetchUsers = async () => {
     try {

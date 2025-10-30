@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
+import { SocketProvider } from './context/SocketContext.jsx';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import Dashboard from './pages/Dashboard.jsx';
@@ -31,48 +32,54 @@ const PublicRoute = ({ children }) => {
 function App() {
   return (
     <Router>
-      <AuthProvider>
-        <Routes>
-          <Route 
-            path="/" 
-            element={<Navigate to="/dashboard" />} 
-          />
-          <Route 
-            path="/login" 
-            element={
-              <PublicRoute>
-                <Login />
-              </PublicRoute>
-            } 
-          />
-          <Route 
-            path="/register" 
-            element={
-              <PublicRoute>
-                <Register />
-              </PublicRoute>
-            } 
-          />
-          <Route 
-            path="/dashboard" 
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/room/:roomId" 
-            element={
-              <ProtectedRoute>
-                <VideoRoom />
-              </ProtectedRoute>
-            } 
-          />
-        </Routes>
-      </AuthProvider>
+      <Routes>
+        <Route 
+          path="/" 
+          element={<Navigate to="/dashboard" />} 
+        />
+        <Route 
+          path="/login" 
+          element={
+            <PublicRoute>
+              <Login />
+            </PublicRoute>
+          } 
+        />
+        <Route 
+          path="/register" 
+          element={
+            <PublicRoute>
+              <Register />
+            </PublicRoute>
+          } 
+        />
+        <Route 
+          path="/dashboard" 
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/room/:roomId" 
+          element={
+            <ProtectedRoute>
+              <VideoRoom />
+            </ProtectedRoute>
+          } 
+        />
+      </Routes>
     </Router>
   );
 }
 
-export default App;
+export default function AppWrapper() {
+  return (
+    <SocketProvider>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </SocketProvider>
+  )
+}
