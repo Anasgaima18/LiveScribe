@@ -6,6 +6,7 @@ import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import VideoRoom from './pages/VideoRoom.jsx';
+import { useAuth } from './context/AuthContext.jsx';
 
 // Protected Route wrapper
 const ProtectedRoute = ({ children }) => {
