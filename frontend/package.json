@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "@livekit/components-react": "^2.0.0",
-    "@livekit/components-styles": "^1.0.12",
+  "@livekit/components-react": "^2.6.3",
+  "@livekit/components-styles": "^1.1.6",
     "axios": "^1.6.2",
-    "livekit-client": "^2.0.0",
+  "livekit-client": "^2.6.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.1",

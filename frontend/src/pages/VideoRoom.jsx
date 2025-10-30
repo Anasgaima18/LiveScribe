@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LiveKitRoom, VideoConference, RoomAudioRenderer } from '@livekit/components-react';
+import { LiveKitRoom, VideoConference, RoomAudioRenderer, StartAudio } from '@livekit/components-react';
 import '@livekit/components-styles';
 import { useAuth } from '../context/AuthContext.jsx';
 import api from '../utils/api';
@@ -77,13 +77,21 @@ const VideoRoom = () => {
   return (
     <div className="video-room-container">
       <LiveKitRoom
-        video={true}
-        audio={true}
+        video
+        audio
         token={token}
         serverUrl={import.meta.env.VITE_LIVEKIT_URL}
         data-lk-theme="default"
         style={{ height: '100vh' }}
         onDisconnected={handleDisconnect}
+        connectOptions={{
+          autoSubscribe: true,
+          publishDefaults: {
+            videoSimulcastLayers: 'hq',
+            video: true,
+            audio: true,
+          },
+        }}
       >
         <div className="room-header">
           <h3>Room: {roomId}</h3>
@@ -100,8 +108,10 @@ const VideoRoom = () => {
           </div>
         </div>
 
-        <VideoConference />
-        <RoomAudioRenderer />
+  <VideoConference />
+  {/* Prompt user to enable audio to avoid AudioContext autoplay errors */}
+  <StartAudio label="Enable Audio" />
+  <RoomAudioRenderer />
         
         {showTranscripts && callId && (
           <TranscriptPanel callId={callId} />
