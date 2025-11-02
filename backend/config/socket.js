@@ -9,9 +9,16 @@ let io;
 const activeUsers = new Map();
 
 export const initSocket = (server) => {
+  const configuredOrigins = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const defaultDevOrigins = ['http://localhost:5173', 'http://localhost:3000'];
+  const allowedOrigins = Array.from(new Set([...configuredOrigins, ...defaultDevOrigins]));
+
   io = new Server(server, {
     cors: {
-      origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+      origin: allowedOrigins,
       credentials: true
     },
     pingTimeout: 60000,

@@ -41,6 +41,14 @@ const io = initSocket(server);
 // Trust proxy
 app.set('trust proxy', 1);
 
+// Build allowed frontend origins (supports multiple origins via FRONTEND_URLS)
+const configuredOrigins = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+const defaultDevOrigins = ['http://localhost:5173', 'http://localhost:3000'];
+const allowedOrigins = Array.from(new Set([...configuredOrigins, ...defaultDevOrigins]));
+
 // Security middleware
 app.use(helmet({
   contentSecurityPolicy: {
@@ -53,7 +61,7 @@ app.use(helmet({
         "'self'",
         'https:',
         'wss:',
-        process.env.FRONTEND_URL || 'http://localhost:3000',
+        ...allowedOrigins,
         process.env.LIVEKIT_URL || 'wss://*.livekit.cloud',
       ].filter(Boolean),
       imgSrc: ["'self'", 'data:', 'blob:'],
@@ -83,12 +91,17 @@ app.use('/api/', limiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 
-// CORS
+// CORS (allow multiple dev origins and configurable list)
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin(origin, callback) {
+    // Allow non-browser requests or same-origin
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 // Body parser

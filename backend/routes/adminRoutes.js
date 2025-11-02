@@ -9,6 +9,7 @@ import {
   getAlertAnalytics,
   manageUser
 } from '../controllers/adminController.js';
+import { runHealthChecks } from '../utils/healthCheck.js';
 
 const router = express.Router();
 
@@ -70,5 +71,19 @@ router.get('/analytics/calls', protect, adminOnly, getCallAnalytics);
  * @access  Admin
  */
 router.get('/analytics/alerts', protect, adminOnly, getAlertAnalytics);
+
+/**
+ * @route   GET /api/admin/health
+ * @desc    Get comprehensive system health check
+ * @access  Admin
+ */
+router.get('/health', protect, adminOnly, async (req, res) => {
+  try {
+    const health = await runHealthChecks();
+    res.json(health);
+  } catch (error) {
+    res.status(500).json({ message: 'Health check failed', error: error.message });
+  }
+});
 
 export default router;

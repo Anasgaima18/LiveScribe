@@ -1,0 +1,175 @@
+import React, { useEffect, useRef, useState } from 'react';
+
+/**
+ * AudioCapture - Captures audio from microphone and streams PCM16 chunks
+ * Compatible with Sarvam AI realtime transcription requirements:
+ * - 16kHz mono PCM16
+ * - Base64 encoded chunks
+ * - ~200ms per chunk
+ */
+export class AudioCapture {
+  constructor() {
+    this.audioContext = null;
+    this.mediaStream = null;
+    this.sourceNode = null;
+    this.processorNode = null;
+    this.isCapturing = false;
+    this.onDataCallback = null;
+    this.onErrorCallback = null;
+  }
+
+  /**
+   * Start capturing audio
+   * @param {Function} onData - Callback(base64Chunk) when audio chunk ready
+   * @param {Function} onError - Callback(error) on errors
+   */
+  async start(onData, onError) {
+    try {
+      this.onDataCallback = onData;
+      this.onErrorCallback = onError;
+
+      // Request microphone access
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          sampleRate: 16000,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+
+      // Create audio context at 16kHz
+      this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+        sampleRate: 16000,
+      });
+
+      this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
+
+      // Use ScriptProcessorNode (deprecated but widely supported)
+      // Buffer size: 4096 samples = ~256ms at 16kHz
+      const bufferSize = 4096;
+      this.processorNode = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+
+      this.processorNode.onaudioprocess = (e) => {
+        if (!this.isCapturing) return;
+
+        const inputData = e.inputBuffer.getChannelData(0);
+        
+        // Convert Float32 [-1, 1] to Int16 PCM16
+        const pcm16 = new Int16Array(inputData.length);
+        for (let i = 0; i < inputData.length; i++) {
+          const s = Math.max(-1, Math.min(1, inputData[i]));
+          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+
+        // Convert to base64
+        const buffer = Buffer.from(pcm16.buffer);
+        const base64 = buffer.toString('base64');
+
+        if (this.onDataCallback) {
+          this.onDataCallback(base64);
+        }
+      };
+
+      this.sourceNode.connect(this.processorNode);
+      this.processorNode.connect(this.audioContext.destination);
+
+      this.isCapturing = true;
+      console.log('Audio capture started: 16kHz mono PCM16');
+    } catch (error) {
+      console.error('Failed to start audio capture:', error);
+      if (this.onErrorCallback) {
+        this.onErrorCallback(error);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Stop capturing audio and release resources
+   */
+  stop() {
+    this.isCapturing = false;
+
+    if (this.processorNode) {
+      this.processorNode.disconnect();
+      this.processorNode = null;
+    }
+
+    if (this.sourceNode) {
+      this.sourceNode.disconnect();
+      this.sourceNode = null;
+    }
+
+    if (this.mediaStream) {
+      this.mediaStream.getTracks().forEach((track) => track.stop());
+      this.mediaStream = null;
+    }
+
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
+    }
+
+    console.log('Audio capture stopped');
+  }
+
+  /**
+   * Check if currently capturing
+   */
+  get active() {
+    return this.isCapturing;
+  }
+}
+
+/**
+ * React hook for audio capture
+ */
+export const useAudioCapture = () => {
+  const captureRef = useRef(null);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    // Initialize capture instance
+    if (!captureRef.current) {
+      captureRef.current = new AudioCapture();
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (captureRef.current?.active) {
+        captureRef.current.stop();
+      }
+    };
+  }, []);
+
+  const startCapture = async (onData) => {
+    try {
+      setError(null);
+      await captureRef.current.start(
+        onData,
+        (err) => setError(err.message)
+      );
+      setIsCapturing(true);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const stopCapture = () => {
+    captureRef.current?.stop();
+    setIsCapturing(false);
+  };
+
+  return {
+    startCapture,
+    stopCapture,
+    isCapturing,
+    error,
+  };
+};
+
+export default AudioCapture;
