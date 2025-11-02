@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { LiveKitRoom, VideoConference, RoomAudioRenderer, StartAudio } from '@livekit/components-react';
 import '@livekit/components-styles';
 import { useAuth } from '../context/AuthContext.jsx';
 import api from '../utils/api';
 import TranscriptPanel from '../components/TranscriptPanel.jsx';
+import { installAllErrorSuppressors } from '../utils/errorSuppressor.js';
 import '../styles/VideoRoom.css';
 
 const VideoRoom = () => {
@@ -17,6 +18,8 @@ const VideoRoom = () => {
   const [error, setError] = useState('');
   const [callId, setCallId] = useState(null);
   const [showTranscripts, setShowTranscripts] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const isMountedRef = useRef(true);
 
   const fetchToken = useCallback(async () => {
     try {
@@ -27,16 +30,22 @@ const VideoRoom = () => {
         }
       });
       
+      if (!isMountedRef.current) return;
+      
       setToken(data.token);
       
       const callResponse = await api.post('/calls', { roomId });
-      setCallId(callResponse.data._id);
       
+      if (!isMountedRef.current) return;
+      
+      setCallId(callResponse.data._id);
       setLoading(false);
     } catch (err) {
       console.error('Error fetching token:', err);
-      setError('Failed to join room');
-      setLoading(false);
+      if (isMountedRef.current) {
+        setError('Failed to join room');
+        setLoading(false);
+      }
     }
   }, [roomId, user]);
 
@@ -47,9 +56,20 @@ const VideoRoom = () => {
     }
     
     fetchToken();
+    
+    // Install error suppressors for LiveKit internal errors
+    const cleanupErrorSuppressors = installAllErrorSuppressors();
+    
+    // Cleanup function
+    return () => {
+      isMountedRef.current = false;
+      cleanupErrorSuppressors();
+    };
   }, [user, roomId, fetchToken, navigate]);
 
-  const handleDisconnect = async () => {
+  const handleDisconnect = useCallback(async () => {
+    setIsConnected(false);
+    
     if (callId) {
       try {
         await api.put(`/calls/${callId}/end`);
@@ -57,8 +77,36 @@ const VideoRoom = () => {
         console.error('Error ending call:', err);
       }
     }
-    navigate('/dashboard');
-  };
+    
+    // Small delay to allow LiveKit to cleanup
+    setTimeout(() => {
+      if (isMountedRef.current) {
+        navigate('/dashboard');
+      }
+    }, 300);
+  }, [callId, navigate]);
+  
+  const handleConnected = useCallback(() => {
+    setIsConnected(true);
+    console.log('Connected to LiveKit room');
+  }, []);
+  
+  const handleError = useCallback((error) => {
+    console.error('LiveKit error:', error);
+    
+    // Suppress internal LiveKit errors that don't affect functionality
+    const errorMessage = error?.message || String(error);
+    if (errorMessage.includes('Element not part of the array') || 
+        errorMessage.includes('placeholder')) {
+      // These are internal LiveKit DOM management errors that can be ignored
+      return;
+    }
+    
+    // Only show critical errors to the user
+    if (error?.code === 'CONNECTION_FAILED' || error?.code === 'ROOM_DISCONNECTED') {
+      setError('Connection lost. Please try rejoining the room.');
+    }
+  }, []);
 
   if (loading) {
     return <div className="loading">Connecting to room...</div>;
@@ -81,13 +129,17 @@ const VideoRoom = () => {
         serverUrl={import.meta.env.VITE_LIVEKIT_URL}
         data-lk-theme="default"
         style={{ height: '100vh' }}
+        onConnected={handleConnected}
         onDisconnected={handleDisconnect}
-        onError={(e) => console.error('LiveKit error:', e)}
+        onError={handleError}
         connectOptions={{
           autoSubscribe: true,
           publishDefaults: {
-            // Defaults used when publishing via UI controls inside VideoConference
-            videoSimulcastLayers: 'hq',
+            videoSimulcastLayers: [
+              { quality: 'high', width: 1280, height: 720 },
+              { quality: 'medium', width: 640, height: 360 },
+              { quality: 'low', width: 320, height: 180 },
+            ],
           },
         }}
       >
@@ -106,11 +158,19 @@ const VideoRoom = () => {
           </div>
         </div>
 
-  <VideoConference />
-  {/* Prompt user to enable audio to avoid AudioContext autoplay errors */}
-  <StartAudio label="Enable Audio" />
-  <RoomAudioRenderer />
+        {/* Video Conference Component */}
+        <div className="video-conference-wrapper">
+          <VideoConference 
+            chatMessageFormatter={undefined}
+            SettingsComponent={undefined}
+          />
+        </div>
         
+        {/* Audio Controls */}
+        <StartAudio label="Enable Audio" />
+        <RoomAudioRenderer />
+        
+        {/* Transcript Panel */}
         {showTranscripts && callId && (
           <TranscriptPanel callId={callId} />
         )}
