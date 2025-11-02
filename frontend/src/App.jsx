@@ -6,6 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import Dashboard from './pages/Dashboard.jsx';
+import AdminDashboard from './pages/AdminDashboard.jsx';
 import VideoRoom from './pages/VideoRoom.jsx';
 import { useAuth } from './context/AuthContext.jsx';
 
@@ -60,6 +61,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedRoute>
+              <AdminDashboard />
             </ProtectedRoute>
           } 
         />

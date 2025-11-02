@@ -366,6 +366,17 @@ NODE_ENV=production npm start
 - **Monitor Alerts**: View content moderation alerts in the transcript panel
 - **Leave Call**: Click "Leave Call" to exit
 
+### 5. Admin Dashboard (Admin Users Only)
+
+1. Navigate to `http://localhost:3000/admin`
+2. View comprehensive analytics:
+   - **Dashboard Stats**: Total users, calls, active sessions, and alerts
+   - **Active Sessions**: Monitor all ongoing video calls in real-time
+   - **User Management**: View, manage, and moderate user accounts
+   - **Call Analytics**: Analyze call duration, participants, and patterns
+   - **Alert Analytics**: Review content moderation alerts by severity
+3. Manage system health and performance
+
 ---
 
 ## 🔧 API Documentation
