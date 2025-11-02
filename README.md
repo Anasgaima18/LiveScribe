@@ -11,7 +11,7 @@
 [![LiveKit](https://img.shields.io/badge/LiveKit-2.0-orange)](https://livekit.io/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4-purple)](https://openai.com/)
 
-[Features](#-features) • [Demo](#-demo) • [Installation](#-installation) • [Usage](#-usage) • [API Documentation](#-api-documentation) • [Contributing](#-contributing)
+[Features](#-features) • [Installation](#-installation) • [Usage](#-usage) • [API Documentation](#-api-documentation) • [Deployment](#-deployment) • [Contributing](#-contributing)
 
 ---
 
@@ -86,6 +86,12 @@
 
 ### 🌟 Advanced Features
 
+- **Real-time Transcription (Sarvam AI)**
+  - Browser audio capture with PCM16 encoding
+  - WebSocket streaming to backend
+  - Partial and final transcript events
+  - Socket.IO real-time updates
+
 - **Multi-language Translation** *(15+ languages)*
   - Google Translate API integration
   - Real-time translation
@@ -102,7 +108,7 @@
   - Call analytics and statistics
   - Real-time monitoring
   - Threat alert management
-  - System health metrics
+  - System health metrics endpoint
 
 - **Dashboard & Analytics**
   - User directory
@@ -110,6 +116,13 @@
   - Transcript management
   - Alert notifications
   - Activity tracking
+
+- **Production Ready**
+  - Error boundaries for graceful failure handling
+  - React Router v7 future flags enabled
+  - Multi-origin CORS support (3000, 5173)
+  - Comprehensive health monitoring
+  - Security hardened with Helmet and rate limiting
 
 ---
 ## 🏗️ Tech Stack
@@ -122,9 +135,10 @@
 | **MongoDB** | 8.19.2 | Database |
 | **Mongoose** | 8.9.5 | ODM |
 | **JWT** | 9.0.2 | Authentication |
-| **LiveKit Server SDK** | 2.14.0 | Video infrastructure |
-| **OpenAI API** | 4.76.2 | AI capabilities |
-| **Socket.IO** | 4.8.1 | Real-time communication |
+| **LiveKit Server SDK** | 2.0+ | Video infrastructure |
+| **OpenAI API** | 4.24+ | AI capabilities |
+| **Socket.IO** | 4.6+ | Real-time communication |
+| **Sarvam AI** | Latest | Real-time transcription (optional) |
 | **bcrypt** | 2.4.3 | Password hashing |
 | **Helmet** | 7.2.0 | Security middleware |
 | **Express Rate Limit** | 7.5.1 | Rate limiting |
@@ -133,12 +147,13 @@
 ### Frontend
 | Technology | Version | Purpose |
 |-----------|---------|---------|
-| **React** | 18.3.1 | UI framework |
-| **Vite** | 7.1.12 | Build tool |
-| **LiveKit Components** | 2.15.13 | Video UI components |
-| **React Router** | 7.1.3 | Routing |
-| **Axios** | 1.7.9 | HTTP client |
-| **Socket.IO Client** | 4.8.1 | Real-time client |
+| **React** | 18.2+ | UI framework |
+| **Vite** | 7.1+ | Build tool |
+| **LiveKit Components** | 2.6.3+ | Video UI components |
+| **LiveKit Client** | 2.6.1+ | LiveKit SDK |
+| **React Router** | 6.20+ | Routing (v7 flags enabled) |
+| **Axios** | 1.6+ | HTTP client |
+| **Socket.IO Client** | 4.8+ | Real-time client |
 
 ### Infrastructure & DevOps
 - **LiveKit Cloud** - Video infrastructure
@@ -250,7 +265,8 @@ CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
 
-# CORS
+# CORS (supports multiple origins)
+FRONTEND_URLS=http://localhost:5173,http://localhost:3000
 FRONTEND_URL=http://localhost:3000
 ```
 
@@ -499,7 +515,10 @@ LiveScribe/
 │   │   ├── emailService.js       # Email notifications
 │   │   ├── translationService.js # Translation API
 │   │   ├── cloudStorage.js       # Cloud storage integration
-│   │   └── errors.js             # Custom error classes
+│   │   ├── healthCheck.js        # System health monitoring
+│   │   ├── errors.js             # Custom error classes
+│   │   └── 📂 transcription/
+│   │       └── sarvamClient.js   # Sarvam AI WebSocket client
 │   ├── 📄 .env                   # Environment variables
 │   ├── 📄 package.json           # Dependencies
 │   └── 📄 server.js              # Entry point
@@ -507,9 +526,12 @@ LiveScribe/
 ├── 📂 frontend/                   # Frontend application
 │   ├── 📂 src/
 │   │   ├── 📂 components/        # React components
-│   │   │   └── TranscriptPanel.js
+│   │   │   ├── TranscriptPanel.jsx
+│   │   │   ├── RealtimeTranscription.jsx
+│   │   │   └── ErrorBoundary.jsx # Error handling
 │   │   ├── 📂 context/           # React context
-│   │   │   └── AuthContext.js    # Authentication state
+│   │   │   ├── AuthContext.jsx   # Authentication state
+│   │   │   └── SocketContext.jsx # Socket.IO connection
 │   │   ├── 📂 pages/             # Page components
 │   │   │   ├── Login.jsx         # Login page
 │   │   │   ├── Register.jsx      # Registration page
@@ -523,7 +545,8 @@ LiveScribe/
 │   │   │   ├── TranscriptPanel.css
 │   │   │   └── AdminDashboard.css
 │   │   ├── 📂 utils/             # Utility functions
-│   │   │   └── api.js            # Axios configuration
+│   │   │   ├── api.js            # Axios configuration
+│   │   │   └── audioCapture.js   # Browser audio capture
 │   │   ├── 📄 App.js             # Main component
 │   │   ├── 📄 index.js           # Entry point
 │   │   └── 📄 index.css          # Global styles
@@ -531,11 +554,11 @@ LiveScribe/
 │   ├── 📄 package.json           # Dependencies
 │   └── 📄 vite.config.js         # Vite configuration
 │
-├── 📄 README.md                   # Documentation
+├── 📄 README.md                   # Main documentation
 ├── 📄 QUICKSTART.md              # Quick start guide
-├── 📄 QUICK_REFERENCE.md         # API reference
-├── 📄 .gitignore                 # Git ignore rules
-└── 📄 package.json               # Root package (optional)
+├── 📄 PRODUCTION_SETUP.md        # Production deployment guide
+├── 📄 TESTING_GUIDE.md           # Testing instructions
+└── 📄 .gitignore                 # Git ignore rules
 ```
 
 ---
@@ -709,23 +732,28 @@ VITE_LIVEKIT_URL=wss://your-project.livekit.cloud
 ## 🛣️ Roadmap
 
 ### Completed ✅
-- [x] Core video conferencing
-- [x] User authentication
-- [x] Real-time transcription
-- [x] AI content moderation (GPT-4)
+- [x] Core video conferencing with LiveKit
+- [x] User authentication (JWT)
+- [x] Real-time transcription (Sarvam AI ready)
+- [x] AI content moderation (GPT-4/OpenAI)
 - [x] AI meeting summaries
 - [x] Multi-language translation
-- [x] Cloud storage integration
-- [x] Admin dashboard
-- [x] Email notifications
+- [x] Cloud storage integration (AWS/Azure/Cloudinary)
+- [x] Admin dashboard with analytics
+- [x] Email notifications for alerts
 - [x] Screen sharing support
+- [x] Error boundaries for React
+- [x] React Router v7 migration flags
+- [x] Multi-origin CORS support
+- [x] System health monitoring endpoint
+- [x] Browser audio capture for real-time transcription
+- [x] Socket.IO real-time updates
+- [x] Production-ready security (Helmet, rate limiting)
 
-### In Progress 🚧
+### Planned �
 - [ ] Mobile application (React Native)
 - [ ] WebRTC fallback for unsupported browsers
 - [ ] Advanced analytics dashboard
-
-### Planned 📅
 - [ ] End-to-end encryption
 - [ ] Chat history persistence
 - [ ] Video recording playback
@@ -735,6 +763,9 @@ VITE_LIVEKIT_URL=wss://your-project.livekit.cloud
 - [ ] Calendar integration (Google, Outlook)
 - [ ] SSO/SAML authentication
 - [ ] Webhooks for integrations
+- [ ] AI-powered meeting notes export (PDF/DOCX)
+- [ ] Sentiment analysis during calls
+- [ ] Speaker diarization improvements
 
 ---
 
@@ -805,10 +836,17 @@ copies or substantial portions of the Software.
 
 ---
 
-## 📞 Support
+## � Additional Documentation
+
+- **[QUICKSTART.md](QUICKSTART.md)** - Get started in 5 minutes
+- **[PRODUCTION_SETUP.md](PRODUCTION_SETUP.md)** - Production deployment guide with security best practices
+- **[TESTING_GUIDE.md](TESTING_GUIDE.md)** - Comprehensive testing scenarios and instructions
+
+## �📞 Support
 
 - **Issues**: [GitHub Issues](https://github.com/Anasgaima18/LiveScribe/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/Anasgaima18/LiveScribe/discussions)
+- **Documentation**: See additional guides in repository root
 - **Email**: support@livescribe.com (if configured)
 
 ---
