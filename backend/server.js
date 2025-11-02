@@ -44,9 +44,20 @@ app.set('trust proxy', 1);
 // Security middleware
 app.use(helmet({
   contentSecurityPolicy: {
+    useDefaults: true,
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
+      // Allow API calls and WebSocket connections to our backend and LiveKit
+      connectSrc: [
+        "'self'",
+        'https:',
+        'wss:',
+        process.env.FRONTEND_URL || 'http://localhost:3000',
+        process.env.LIVEKIT_URL || 'wss://*.livekit.cloud',
+      ].filter(Boolean),
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      mediaSrc: ["'self'", 'data:', 'blob:'],
     },
   },
   crossOriginEmbedderPolicy: false,

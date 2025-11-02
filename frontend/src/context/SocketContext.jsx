@@ -17,7 +17,9 @@ export const SocketProvider = ({ children }) => {
       if (socketRef.current) {
         socketRef.current.disconnect();
       }
-      const socketInstance = io(import.meta.env.VITE_API_URL.replace('/api', ''), {
+      const apiBase = import.meta.env.VITE_API_URL || `${window.location.origin}/api`;
+      const socketUrl = apiBase.replace('/api', '');
+      const socketInstance = io(socketUrl, {
         auth: { token: user.token },
         autoConnect: true,
         transports: ['websocket']
