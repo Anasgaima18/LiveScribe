@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSocket } from '../context/SocketContext.jsx';
 import api from '../utils/api';
 import '../styles/TranscriptPanel.css';
 
@@ -8,6 +9,7 @@ const TranscriptPanel = ({ callId }) => {
   const [summary, setSummary] = useState('');
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('transcripts');
+  const socket = useSocket();
 
   const fetchTranscripts = useCallback(async () => {
     try {
@@ -30,16 +32,68 @@ const TranscriptPanel = ({ callId }) => {
   useEffect(() => {
     if (!callId) return;
 
+    // Initial fetch
     fetchTranscripts();
     fetchAlerts();
 
+    // Subscribe to real-time transcript and alert events
+    if (socket) {
+      const onTranscriptNew = (payload) => {
+        // payload: { userId, userName, segment }
+        setTranscripts((prev) => {
+          // Try to find an existing transcript for the user
+          const idx = prev.findIndex(t => t.userId && t.userId._id === payload.userId);
+          const seg = payload.segment || {};
+          const newSeg = {
+            text: seg.text || '',
+            timestamp: seg.timestamp || Date.now(),
+          };
+          if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = {
+              ...updated[idx],
+              segments: [...(updated[idx].segments || []), newSeg],
+            };
+            return updated;
+          }
+          // If no transcript for this user yet, create a new one entry-like
+          return [
+            ...prev,
+            {
+              userId: { _id: payload.userId, name: payload.userName },
+              segments: [newSeg],
+            },
+          ];
+        });
+      };
+
+      const onAlertNew = (payload) => {
+        // payload: { userId, userName, alert }
+        setAlerts((prev) => [
+          ...prev,
+          {
+            ...payload.alert,
+            userId: { _id: payload.userId, name: payload.userName },
+          },
+        ]);
+      };
+
+      socket.on('transcript:new', onTranscriptNew);
+      socket.on('alert:new', onAlertNew);
+
+      return () => {
+        socket.off('transcript:new', onTranscriptNew);
+        socket.off('alert:new', onAlertNew);
+      };
+    }
+
+    // Fallback polling every 5s if no socket
     const interval = setInterval(() => {
       fetchTranscripts();
       fetchAlerts();
     }, 5000);
-
     return () => clearInterval(interval);
-  }, [callId, fetchTranscripts, fetchAlerts]);
+  }, [callId, fetchTranscripts, fetchAlerts, socket]);
 
   const generateSummary = async () => {
     setLoading(true);

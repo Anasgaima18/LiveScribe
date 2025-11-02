@@ -159,6 +159,59 @@ export const initSocket = (server) => {
       });
     });
 
+    // OPTIONAL: Realtime transcription passthrough (Sarvam AI skeleton)
+    // Client can send raw PCM chunks; backend forwards to Sarvam and emits
+    // 'transcript:new' events to the room. This is a skeleton; fill Sarvam client.
+    let sarvamSession = null;
+    socket.on('transcription:start', async ({ roomId, language = 'en' }) => {
+      try {
+        if (process.env.TRANSCRIPTION_PROVIDER !== 'sarvam') return;
+        const { createSarvamClient } = await import('../utils/transcription/sarvamClient.js');
+        sarvamSession = createSarvamClient();
+        sarvamSession.on('partial', (data) => {
+          io.to(`call:${roomId}`).emit('transcript:new', {
+            userId,
+            userName: socket.user.name,
+            segment: { text: data.text, timestamp: data.timestamp, isPartial: true },
+          });
+        });
+        sarvamSession.on('final', (data) => {
+          io.to(`call:${roomId}`).emit('transcript:new', {
+            userId,
+            userName: socket.user.name,
+            segment: { text: data.text, timestamp: data.timestamp, isPartial: false },
+          });
+        });
+        sarvamSession.on('error', (err) => {
+          logger.error('Sarvam session error:', err);
+        });
+        sarvamSession.connect();
+      } catch (e) {
+        logger.error('Failed to start transcription:', e);
+      }
+    });
+
+    socket.on('transcription:audio', ({ chunk }) => {
+      try {
+        if (sarvamSession && chunk) {
+          // Expect chunk as base64-encoded PCM16 mono 16kHz
+          const buf = Buffer.from(chunk, 'base64');
+          sarvamSession.sendAudio(buf);
+        }
+      } catch (e) {
+        logger.error('transcription:audio error:', e);
+      }
+    });
+
+    socket.on('transcription:stop', () => {
+      try {
+        if (sarvamSession) sarvamSession.close();
+        sarvamSession = null;
+      } catch (e) {
+        logger.error('Failed to stop transcription:', e);
+      }
+    });
+
     // Handle alert notification
     socket.on('alert:detected', ({ roomId, alert }) => {
       io.to(`call:${roomId}`).emit('alert:new', {
