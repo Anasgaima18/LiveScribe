@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { LiveKitRoom, VideoConference, RoomAudioRenderer, StartAudio } from '@livekit/components-react';
 import '@livekit/components-styles';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useSocket } from '../context/SocketContext.jsx';
 import api from '../utils/api';
 import TranscriptPanel from '../components/TranscriptPanel.jsx';
 import { installAllErrorSuppressors } from '../utils/errorSuppressor.js';
@@ -11,6 +12,7 @@ import '../styles/VideoRoom.css';
 const VideoRoom = () => {
   const { roomId } = useParams();
   const { user } = useAuth();
+  const socket = useSocket();
   const navigate = useNavigate();
   
   const [token, setToken] = useState('');
@@ -48,6 +50,19 @@ const VideoRoom = () => {
       }
     }
   }, [roomId, user]);
+
+  // Join socket room when component mounts
+  useEffect(() => {
+    if (socket && roomId) {
+      console.log(`[VideoRoom] Joining socket room: ${roomId}`);
+      socket.emit('call:join', { roomId });
+      
+      return () => {
+        console.log(`[VideoRoom] Leaving socket room: ${roomId}`);
+        socket.emit('call:leave', { roomId });
+      };
+    }
+  }, [socket, roomId]);
 
   useEffect(() => {
     if (!user) {
@@ -140,6 +155,22 @@ const VideoRoom = () => {
               { quality: 'medium', width: 640, height: 360 },
               { quality: 'low', width: 320, height: 180 },
             ],
+          },
+          // Configure ICE servers for better connectivity
+          rtcConfig: {
+            iceServers: [
+              { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:stun1.l.google.com:19302' },
+              { urls: 'stun:stun2.l.google.com:19302' },
+            ],
+            iceTransportPolicy: 'all',
+          },
+          // Increase reconnection attempts
+          reconnectPolicy: {
+            nextRetryDelayInMs: (context) => {
+              return Math.min(1000 * Math.pow(2, context.retryCount), 10000);
+            },
+            maxAttempts: 10,
           },
         }}
       >

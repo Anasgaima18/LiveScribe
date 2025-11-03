@@ -28,7 +28,7 @@ export const getToken = async (req, res) => {
       name: participantName,
     });
 
-    // Grant permissions
+    // Grant permissions with extended timeout
     at.addGrant({
       room: roomName,
       roomJoin: true,
@@ -37,13 +37,22 @@ export const getToken = async (req, res) => {
       canPublishData: true,
     });
 
+    // Set TTL to 24 hours
+    at.ttl = '24h';
+
     const token = await at.toJwt();
 
     res.json({
       token,
       url: process.env.LIVEKIT_URL,
       roomName,
-      participantName
+      participantName,
+      // Include ICE server configuration hints
+      iceServers: [
+        {
+          urls: 'stun:stun.l.google.com:19302'
+        }
+      ]
     });
   } catch (error) {
     console.error('LiveKit token generation error:', error);

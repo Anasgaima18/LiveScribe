@@ -120,15 +120,25 @@ export const initSocket = (server) => {
     });
 
     // Handle call invitation
-    socket.on('call:invite', ({ targetUserId, roomId, callId }) => {
-      const targetUser = activeUsers.get(targetUserId);
+    socket.on('call:invite', ({ to, targetUserId, roomId, callId, from }) => {
+      const recipientUserId = to || targetUserId;
+      const targetUser = activeUsers.get(recipientUserId);
+      
       if (targetUser) {
+        // Send to both 'call:invitation' and 'call:invite' for compatibility
         io.to(targetUser.socketId).emit('call:invitation', {
-          from: socket.user,
+          from: from || socket.user,
           roomId,
           callId
         });
-        logger.info(`Call invitation sent to ${targetUserId}`);
+        io.to(targetUser.socketId).emit('call:invite', {
+          from: from || socket.user,
+          roomId,
+          callId
+        });
+        logger.info(`Call invitation sent from ${socket.user.name} to ${recipientUserId}`);
+      } else {
+        logger.warn(`User ${recipientUserId} is not online or not found`);
       }
     });
 

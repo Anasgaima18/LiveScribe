@@ -21,13 +21,37 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!socket) return;
-    const handler = (data) => {
+    
+    const handleInvitation = (data) => {
       console.log('[SOCKET] Received call:invitation', data);
-      alert(`Incoming call from ${data.from?.name || 'unknown'}! Join room: ${data.roomId}`);
+      const fromName = data.from?.name || 'someone';
+      const shouldJoin = window.confirm(
+        `Incoming call from ${fromName}! Would you like to join?`
+      );
+      if (shouldJoin && data.roomId) {
+        navigate(`/room/${data.roomId}`);
+      }
     };
-    socket.on('call:invitation', handler);
-    return () => socket.off('call:invitation', handler);
-  }, [socket]);
+    
+    const handleInvite = (data) => {
+      console.log('[SOCKET] Received call:invite', data);
+      const fromName = data.from?.name || 'someone';
+      const shouldJoin = window.confirm(
+        `${fromName} is inviting you to a video call! Would you like to join?`
+      );
+      if (shouldJoin && data.roomId) {
+        navigate(`/room/${data.roomId}`);
+      }
+    };
+    
+    socket.on('call:invitation', handleInvitation);
+    socket.on('call:invite', handleInvite);
+    
+    return () => {
+      socket.off('call:invitation', handleInvitation);
+      socket.off('call:invite', handleInvite);
+    };
+  }, [socket, navigate]);
 
   const fetchUsers = async () => {
     try {
@@ -65,10 +89,25 @@ const Dashboard = () => {
     const roomId = `room-${Date.now()}`;
     
     try {
+      // Format participants correctly as array of objects with userId
+      const participantsList = selectedUsers.map(userId => ({ userId }));
+      
       await api.post('/calls', {
         roomId,
-        participants: selectedUsers
+        participants: participantsList
       });
+      
+      // Notify via socket that we're starting a call
+      if (socket) {
+        selectedUsers.forEach(userId => {
+          socket.emit('call:invite', {
+            to: userId,
+            roomId,
+            from: user
+          });
+        });
+      }
+      
       navigate(`/room/${roomId}`);
     } catch (err) {
       console.error('Failed to create call:', err);
