@@ -8,6 +8,15 @@ const SUPPRESSED_ERROR_PATTERNS = [
   'placeholder not in',
   '_camera_placeholder',
   'updatePages()',
+  'peerconnection failed disconnected',
+  'resuming signal connection',
+  'Resuming signal connection',
+  'Resumed signal connection',
+  'leave-reconnect disconnected',
+  'already attempting reconnect',
+  'WebSocket is already in CLOSING or CLOSED state',
+  'reconnect disconnected',
+  'reconnecting, attempt:',
 ];
 
 /**
@@ -93,12 +102,40 @@ export const installUnhandledRejectionHandler = () => {
 };
 
 /**
+ * Install console.log suppressor for LiveKit internal logs
+ */
+export const installLogSuppressor = () => {
+  const originalConsoleLog = console.log;
+  
+  console.log = (...args) => {
+    // Check if any of the arguments match suppressed patterns
+    const shouldSuppress = args.some(arg => {
+      if (typeof arg === 'string') {
+        return SUPPRESSED_ERROR_PATTERNS.some(pattern => arg.includes(pattern));
+      }
+      return false;
+    });
+    
+    // If not suppressed, call original console.log
+    if (!shouldSuppress) {
+      originalConsoleLog.apply(console, args);
+    }
+  };
+  
+  // Return cleanup function
+  return () => {
+    console.log = originalConsoleLog;
+  };
+};
+
+/**
  * Install all error suppressors
  * Returns a cleanup function to remove all handlers
  */
 export const installAllErrorSuppressors = () => {
   const cleanupFns = [
     installErrorSuppressor(),
+    installLogSuppressor(),
     installWindowErrorHandler(),
     installUnhandledRejectionHandler(),
   ];
