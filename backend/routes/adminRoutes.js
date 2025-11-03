@@ -10,6 +10,7 @@ import {
   manageUser
 } from '../controllers/adminController.js';
 import { runHealthChecks } from '../utils/healthCheck.js';
+import { testLiveKitConnection, getLiveKitStatus } from '../utils/livekitDiagnostics.js';
 
 const router = express.Router();
 
@@ -83,6 +84,34 @@ router.get('/health', protect, adminOnly, async (req, res) => {
     res.json(health);
   } catch (error) {
     res.status(500).json({ message: 'Health check failed', error: error.message });
+  }
+});
+
+/**
+ * @route   GET /api/admin/livekit/test
+ * @desc    Test LiveKit server connectivity
+ * @access  Admin
+ */
+router.get('/livekit/test', protect, adminOnly, async (req, res) => {
+  try {
+    const results = await testLiveKitConnection();
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ message: 'LiveKit test failed', error: error.message });
+  }
+});
+
+/**
+ * @route   GET /api/admin/livekit/status
+ * @desc    Get LiveKit server status and active rooms
+ * @access  Admin
+ */
+router.get('/livekit/status', protect, adminOnly, async (req, res) => {
+  try {
+    const status = await getLiveKitStatus();
+    res.json(status);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to get LiveKit status', error: error.message });
   }
 });
 

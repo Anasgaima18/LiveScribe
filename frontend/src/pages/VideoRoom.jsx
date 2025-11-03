@@ -7,6 +7,7 @@ import { useSocket } from '../context/SocketContext.jsx';
 import api from '../utils/api';
 import TranscriptPanel from '../components/TranscriptPanel.jsx';
 import { installAllErrorSuppressors } from '../utils/errorSuppressor.js';
+import { diagnoseConnectionFailure } from '../utils/livekitDiagnostics.js';
 import '../styles/VideoRoom.css';
 
 const VideoRoom = () => {
@@ -25,6 +26,8 @@ const VideoRoom = () => {
 
   const fetchToken = useCallback(async () => {
     try {
+      console.log('[VideoRoom] Fetching LiveKit token for room:', roomId);
+      
       const { data } = await api.get('/livekit/token', {
         params: {
           roomName: roomId,
@@ -33,6 +36,9 @@ const VideoRoom = () => {
       });
       
       if (!isMountedRef.current) return;
+      
+      console.log('[VideoRoom] Token received, LiveKit URL:', data.url);
+      console.log('[VideoRoom] Room name:', data.roomName);
       
       setToken(data.token);
       
@@ -43,9 +49,12 @@ const VideoRoom = () => {
       setCallId(callResponse.data._id);
       setLoading(false);
     } catch (err) {
-      console.error('Error fetching token:', err);
+      console.error('[VideoRoom] Error fetching token:', err);
+      console.error('[VideoRoom] Error details:', err.response?.data);
+      
       if (isMountedRef.current) {
-        setError('Failed to join room');
+        const errorMsg = err.response?.data?.message || 'Failed to join room. Please check LiveKit configuration.';
+        setError(errorMsg);
         setLoading(false);
       }
     }
@@ -103,11 +112,13 @@ const VideoRoom = () => {
   
   const handleConnected = useCallback(() => {
     setIsConnected(true);
-    console.log('Connected to LiveKit room');
+    console.log('[VideoRoom] ✅ Successfully connected to LiveKit room');
   }, []);
   
   const handleError = useCallback((error) => {
-    console.error('LiveKit error:', error);
+    console.error('[VideoRoom] ❌ LiveKit error:', error);
+    console.error('[VideoRoom] Error code:', error?.code);
+    console.error('[VideoRoom] Error message:', error?.message);
     
     // Suppress internal LiveKit errors that don't affect functionality
     const errorMessage = error?.message || String(error);
@@ -117,11 +128,31 @@ const VideoRoom = () => {
       return;
     }
     
-    // Only show critical errors to the user
-    if (error?.code === 'CONNECTION_FAILED' || error?.code === 'ROOM_DISCONNECTED') {
-      setError('Connection lost. Please try rejoining the room.');
+    // Handle connection errors
+    if (error?.code === 'CONNECTION_FAILED' || 
+        error?.code === 'ROOM_DISCONNECTED' ||
+        errorMessage.includes('peerconnection failed') ||
+        errorMessage.includes('WebSocket')) {
+      console.error('[VideoRoom] Connection issue detected. Possible causes:');
+      console.error('  - LiveKit server is down or unreachable');
+      console.error('  - Invalid API credentials');
+      console.error('  - Network/firewall blocking WebSocket connection');
+      console.error('  - STUN/TURN server configuration issue');
+      
+      // Run diagnostics
+      if (token) {
+        diagnoseConnectionFailure(import.meta.env.VITE_LIVEKIT_URL, token).catch(console.error);
+      }
+      
+      setError(
+        'Unable to establish video connection. This could be due to:\n' +
+        '• LiveKit server configuration issues\n' +
+        '• Network/firewall restrictions\n' +
+        '• Invalid credentials\n\n' +
+        'Please check the console for detailed diagnostics.'
+      );
     }
-  }, []);
+  }, [token]);
 
   if (loading) {
     return <div className="loading">Connecting to room...</div>;
