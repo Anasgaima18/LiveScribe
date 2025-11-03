@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useSocket } from '../context/SocketContext.jsx';
 import api from '../utils/api';
 import TranscriptPanel from '../components/TranscriptPanel.jsx';
+import RealtimeTranscription from '../components/RealtimeTranscription.jsx';
 import { installAllErrorSuppressors } from '../utils/errorSuppressor.js';
 import { diagnoseConnectionFailure } from '../utils/livekitDiagnostics.js';
 import '../styles/VideoRoom.css';
@@ -262,6 +263,8 @@ const VideoRoom = () => {
         {/* Transcript Panel - Overlay on right */}
         {showTranscripts && callId && (
           <div className="transcript-overlay">
+            {/* Realtime Transcription controls */}
+            <RealtimeTranscription roomId={roomId} callId={callId} enabled={true} />
             <TranscriptPanel callId={callId} />
           </div>
         )}

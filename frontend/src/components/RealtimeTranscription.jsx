@@ -12,6 +12,7 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
   const { startCapture, stopCapture, isCapturing, error } = useAudioCapture();
   const [transcripts, setTranscripts] = useState([]);
   const [status, setStatus] = useState('idle'); // idle, starting, active, stopping
+  const mode = (import.meta.env.VITE_TRANSCRIPTION_MODE || 'server').toLowerCase(); // 'server' | 'browser'
 
   useEffect(() => {
     if (!socket || !enabled) return;
@@ -42,13 +43,42 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
 
     setStatus('starting');
     try {
-      // Notify backend to start Sarvam session
-      socket.emit('transcription:start', { roomId, language: 'en' });
+      if (mode === 'browser' && 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        // Browser speech recognition fallback
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.interimResults = true;
+        recognition.continuous = true;
 
-      // Start audio capture and stream chunks
-      await startCapture((base64Chunk) => {
-        socket.emit('transcription:audio', { chunk: base64Chunk });
-      });
+        recognition.onresult = (event) => {
+          let interim = '';
+          let finalText = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) finalText += transcript;
+            else interim += transcript;
+          }
+          if (interim) {
+            socket.emit('transcription:text', { roomId, callId, text: interim, isPartial: true });
+          }
+          if (finalText) {
+            socket.emit('transcription:text', { roomId, callId, text: finalText, isPartial: false });
+          }
+        };
+        recognition.onerror = (e) => console.warn('SpeechRecognition error', e.error);
+        recognition.onend = () => console.log('SpeechRecognition ended');
+        recognition.start();
+        // Attach to window so we can stop later
+        window.__rt_recognition = recognition;
+      } else {
+        // Server-side (Sarvam) mode
+        socket.emit('transcription:start', { roomId, language: 'en' });
+        // Start audio capture and stream chunks to backend
+        await startCapture((base64Chunk) => {
+          socket.emit('transcription:audio', { chunk: base64Chunk });
+        });
+      }
 
       setStatus('active');
     } catch (err) {
@@ -61,6 +91,10 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
     if (!socket) return;
 
     setStatus('stopping');
+    if (window.__rt_recognition) {
+      try { window.__rt_recognition.stop(); } catch {}
+      window.__rt_recognition = null;
+    }
     stopCapture();
     socket.emit('transcription:stop');
     setStatus('idle');

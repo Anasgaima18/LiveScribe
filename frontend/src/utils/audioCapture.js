@@ -63,9 +63,18 @@ export class AudioCapture {
           pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
         }
 
-        // Convert to base64
-        const buffer = Buffer.from(pcm16.buffer);
-        const base64 = buffer.toString('base64');
+        // Convert to base64 (browser-safe, no Node Buffer)
+        const toBase64 = (arrayBuffer) => {
+          const bytes = new Uint8Array(arrayBuffer);
+          let binary = '';
+          const chunkSize = 0x8000; // process in chunks to avoid call stack limits
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            const chunk = bytes.subarray(i, i + chunkSize);
+            binary += String.fromCharCode.apply(null, chunk);
+          }
+          return btoa(binary);
+        };
+        const base64 = toBase64(pcm16.buffer);
 
         if (this.onDataCallback) {
           this.onDataCallback(base64);
