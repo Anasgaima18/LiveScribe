@@ -219,6 +219,7 @@ const VideoRoom = () => {
           peerConnectionTimeout: 15000,
         }}
       >
+        {/* Room Header - Fixed at top */}
         <div className="room-header">
           <h3>Room: {roomId}</h3>
           <div className="room-actions">
@@ -234,21 +235,18 @@ const VideoRoom = () => {
           </div>
         </div>
 
-        {/* Video Conference Component */}
-        <div className="video-conference-wrapper">
-          <VideoConference 
-            chatMessageFormatter={undefined}
-            SettingsComponent={undefined}
-          />
-        </div>
+        {/* Main Video Conference - Full Screen */}
+        <VideoConference />
         
-        {/* Audio Controls */}
-        <StartAudio label="Enable Audio" />
+        {/* Audio Controls - Hidden but functional */}
+        <StartAudio label="Click to Enable Audio" />
         <RoomAudioRenderer />
         
-        {/* Transcript Panel */}
+        {/* Transcript Panel - Overlay on right */}
         {showTranscripts && callId && (
-          <TranscriptPanel callId={callId} />
+          <div className="transcript-overlay">
+            <TranscriptPanel callId={callId} />
+          </div>
         )}
       </LiveKitRoom>
     </div>

@@ -134,3 +134,83 @@
   cursor: pointer;
   font-weight: 600;
 }
+
+/* LiveKit Room - Full Screen */
+.lk-room-container {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100% !important;
+  height: 100% !important;
+  background: #000;
+}
+
+/* Video Conference - Full Screen Below Header */
+.lk-video-conference {
+  position: absolute !important;
+  top: 65px !important; /* Below header */
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: calc(100vh - 65px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Ensure video tiles are visible */
+.lk-grid-layout {
+  width: 100% !important;
+  height: 100% !important;
+  display: grid !important;
+  gap: 8px;
+  padding: 16px;
+}
+
+.lk-participant-tile {
+  position: relative !important;
+  background: #1a1a1a;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.lk-participant-tile video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+}
+
+/* Control Bar */
+.lk-control-bar {
+  position: absolute !important;
+  bottom: 24px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  background: rgba(29, 29, 31, 0.95) !important;
+  backdrop-filter: blur(40px) !important;
+  padding: 12px 24px !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
+  z-index: 200 !important;
+}
+
+/* Transcript Overlay */
+.transcript-overlay {
+  position: absolute;
+  top: 65px;
+  right: 0;
+  width: 400px;
+  height: calc(100vh - 65px);
+  background: rgba(29, 29, 31, 0.95);
+  backdrop-filter: blur(40px);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 150;
+  overflow-y: auto;
+}
