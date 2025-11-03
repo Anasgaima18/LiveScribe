@@ -18,6 +18,7 @@ const VideoRoom = () => {
   const navigate = useNavigate();
   
   const [token, setToken] = useState('');
+  const [serverUrl, setServerUrl] = useState(import.meta.env.VITE_LIVEKIT_URL || '');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [callId, setCallId] = useState(null);
@@ -42,6 +43,9 @@ const VideoRoom = () => {
       console.log('[VideoRoom] Room name:', data.roomName);
       
       setToken(data.token);
+      if (data.url) {
+        setServerUrl(data.url);
+      }
       
       const callResponse = await api.post('/calls', { roomId });
       
@@ -187,7 +191,7 @@ const VideoRoom = () => {
       
       <LiveKitRoom
         token={token}
-        serverUrl={import.meta.env.VITE_LIVEKIT_URL}
+        serverUrl={serverUrl}
         data-lk-theme="default"
         style={{ height: '100vh' }}
         onConnected={handleConnected}
@@ -201,19 +205,11 @@ const VideoRoom = () => {
               { quality: 'medium', width: 640, height: 360 },
               { quality: 'low', width: 320, height: 180 },
             ],
+            stopLocalTrackOnUnpublish: true,
           },
-          // Configure ICE servers for better connectivity
-          rtcConfig: {
-            iceServers: [
-              { urls: 'stun:stun.l.google.com:19302' },
-              { urls: 'stun:stun1.l.google.com:19302' },
-              { urls: 'stun:stun2.l.google.com:19302' },
-              { urls: 'stun:stun3.l.google.com:19302' },
-              { urls: 'stun:stun4.l.google.com:19302' },
-            ],
-            iceTransportPolicy: 'all',
-            iceCandidatePoolSize: 10,
-          },
+          // Let LiveKit provide optimal TURN/STUN; do not override rtcConfig
+          adaptiveStream: true,
+          dynacast: true,
           // Increase reconnection attempts with more aggressive backoff
           reconnectPolicy: {
             nextRetryDelayInMs: (context) => {

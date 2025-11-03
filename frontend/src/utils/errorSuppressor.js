@@ -15,6 +15,8 @@ const SUPPRESSED_ERROR_PATTERNS = [
   'Resumed signal connection',
   'publishing track',
   'disconnect from room',
+  'websocket closed',
+  'detected connection state mismatch',
   'leave-reconnect disconnected',
   'already attempting reconnect',
   'WebSocket is already in CLOSING or CLOSED state',
