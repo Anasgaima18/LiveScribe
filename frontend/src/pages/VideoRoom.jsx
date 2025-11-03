@@ -170,6 +170,13 @@ const VideoRoom = () => {
 
   return (
     <div className="video-room-container">
+      {!isConnected && (
+        <div className="connection-status">
+          <p>🔄 Connecting to LiveKit server...</p>
+          <small>If this takes too long, the server may be inactive</small>
+        </div>
+      )}
+      
       <LiveKitRoom
         token={token}
         serverUrl={import.meta.env.VITE_LIVEKIT_URL}
@@ -193,16 +200,23 @@ const VideoRoom = () => {
               { urls: 'stun:stun.l.google.com:19302' },
               { urls: 'stun:stun1.l.google.com:19302' },
               { urls: 'stun:stun2.l.google.com:19302' },
+              { urls: 'stun:stun3.l.google.com:19302' },
+              { urls: 'stun:stun4.l.google.com:19302' },
             ],
             iceTransportPolicy: 'all',
+            iceCandidatePoolSize: 10,
           },
-          // Increase reconnection attempts
+          // Increase reconnection attempts with more aggressive backoff
           reconnectPolicy: {
             nextRetryDelayInMs: (context) => {
-              return Math.min(1000 * Math.pow(2, context.retryCount), 10000);
+              if (context.retryCount === 0) return 500;  // First retry fast
+              if (context.retryCount < 3) return 1000;   // Next few retries at 1s
+              return Math.min(2000 * context.retryCount, 10000);
             },
-            maxAttempts: 10,
+            maxAttempts: 15,
           },
+          // Add disconnection recovery
+          peerConnectionTimeout: 15000,
         }}
       >
         <div className="room-header">
