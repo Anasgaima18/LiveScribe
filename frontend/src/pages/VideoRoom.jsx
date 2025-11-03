@@ -236,7 +236,17 @@ const VideoRoom = () => {
         </div>
 
         {/* Main Video Conference - Full Screen */}
-        <VideoConference />
+        <VideoConference 
+          style={{ 
+            width: '100%', 
+            height: '100%',
+            position: 'absolute',
+            top: '65px',
+            left: 0,
+            right: 0,
+            bottom: 0
+          }}
+        />
         
         {/* Audio Controls - Hidden but functional */}
         <StartAudio label="Click to Enable Audio" />

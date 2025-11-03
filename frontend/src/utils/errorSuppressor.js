@@ -129,6 +129,37 @@ export const installLogSuppressor = () => {
 };
 
 /**
+ * Install console.warn suppressor for LiveKit internal warnings
+ */
+export const installWarnSuppressor = () => {
+  const originalConsoleWarn = console.warn;
+  
+  console.warn = (...args) => {
+    // Check if any of the arguments match suppressed patterns
+    const shouldSuppress = args.some(arg => {
+      if (typeof arg === 'string') {
+        return SUPPRESSED_ERROR_PATTERNS.some(pattern => arg.includes(pattern));
+      }
+      if (typeof arg === 'object' && arg !== null) {
+        const str = JSON.stringify(arg);
+        return SUPPRESSED_ERROR_PATTERNS.some(pattern => str.includes(pattern));
+      }
+      return false;
+    });
+    
+    // If not suppressed, call original console.warn
+    if (!shouldSuppress) {
+      originalConsoleWarn.apply(console, args);
+    }
+  };
+  
+  // Return cleanup function
+  return () => {
+    console.warn = originalConsoleWarn;
+  };
+};
+
+/**
  * Install all error suppressors
  * Returns a cleanup function to remove all handlers
  */
@@ -136,6 +167,7 @@ export const installAllErrorSuppressors = () => {
   const cleanupFns = [
     installErrorSuppressor(),
     installLogSuppressor(),
+    installWarnSuppressor(),
     installWindowErrorHandler(),
     installUnhandledRejectionHandler(),
   ];
