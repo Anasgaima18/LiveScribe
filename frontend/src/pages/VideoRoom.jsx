@@ -124,6 +124,10 @@ const VideoRoom = () => {
   
   const handleConnected = useCallback(() => {
     setIsConnected(true);
+    // Optionally auto-open transcripts panel for faster access
+    if (import.meta.env.VITE_AUTO_OPEN_TRANSCRIPTS === 'true') {
+      setShowTranscripts(true);
+    }
     console.log('[VideoRoom] ✅ Successfully connected to LiveKit room');
   }, []);
   

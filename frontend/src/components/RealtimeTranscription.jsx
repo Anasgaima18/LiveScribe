@@ -13,6 +13,9 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
   const [transcripts, setTranscripts] = useState([]);
   const [status, setStatus] = useState('idle'); // idle, starting, active, stopping
   const mode = (import.meta.env.VITE_TRANSCRIPTION_MODE || 'server').toLowerCase(); // 'server' | 'browser'
+  const autoStart = (import.meta.env.VITE_TRANSCRIPTION_AUTOSTART === 'true');
+  const [providerStatus, setProviderStatus] = useState('idle'); // idle | active | disabled | error
+  const [providerName, setProviderName] = useState('');
 
   useEffect(() => {
     if (!socket || !enabled) return;
@@ -43,7 +46,7 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
 
     setStatus('starting');
     try {
-      if (mode === 'browser' && 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+  if (mode === 'browser' && (('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window))) {
         // Browser speech recognition fallback
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
@@ -71,6 +74,8 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
         recognition.start();
         // Attach to window so we can stop later
         window.__rt_recognition = recognition;
+        setProviderStatus('active');
+        setProviderName('browser');
       } else {
         // Server-side (Sarvam) mode
         socket.emit('transcription:start', { roomId, language: 'en' });
@@ -78,6 +83,7 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
         await startCapture((base64Chunk) => {
           socket.emit('transcription:audio', { chunk: base64Chunk });
         });
+        setProviderName('sarvam');
       }
 
       setStatus('active');
@@ -98,7 +104,29 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
     stopCapture();
     socket.emit('transcription:stop');
     setStatus('idle');
+    setProviderStatus('idle');
   };
+
+  // Listen for backend provider status updates
+  useEffect(() => {
+    if (!socket) return;
+    const onStatus = ({ status, provider, reason }) => {
+      setProviderStatus(status);
+      if (provider) setProviderName(provider);
+      if (status === 'error') console.warn('Transcription provider error:', reason);
+      if (status === 'disabled') console.warn('Transcription provider disabled:', reason);
+    };
+    socket.on('transcript:status', onStatus);
+    return () => socket.off('transcript:status', onStatus);
+  }, [socket]);
+
+  // Auto start if enabled
+  useEffect(() => {
+    if (autoStart && status === 'idle') {
+      handleStart();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart]);
 
   if (!enabled) {
     return null;
@@ -108,6 +136,7 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
     <div className="realtime-transcription">
       <div className="rt-header">
         <h4>Realtime Transcription</h4>
+        <div className="rt-status">{`Mode: ${providerName || mode} | Status: ${providerStatus}`}</div>
         <div className="rt-controls">
           {!isCapturing ? (
             <button

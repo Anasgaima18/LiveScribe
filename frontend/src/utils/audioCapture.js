@@ -17,6 +17,30 @@ export class AudioCapture {
     this.onDataCallback = null;
     this.onErrorCallback = null;
   }
+  // Downsample a Float32Array from sourceSampleRate to 16000 Hz
+  downsampleTo16k(inputFloat32, sourceSampleRate) {
+    const targetRate = 16000;
+    if (sourceSampleRate === targetRate) return inputFloat32;
+    const sampleRateRatio = sourceSampleRate / targetRate;
+    const newLength = Math.round(inputFloat32.length / sampleRateRatio);
+    const result = new Float32Array(newLength);
+    let offsetResult = 0;
+    let offsetSource = 0;
+    while (offsetResult < result.length) {
+      const nextOffsetSource = Math.round((offsetResult + 1) * sampleRateRatio);
+      // Simple average to reduce aliasing
+      let accum = 0, count = 0;
+      for (let i = Math.floor(offsetSource); i < Math.floor(nextOffsetSource) && i < inputFloat32.length; i++) {
+        accum += inputFloat32[i];
+        count++;
+      }
+      result[offsetResult] = count > 0 ? accum / count : 0;
+      offsetResult++;
+      offsetSource = nextOffsetSource;
+    }
+    return result;
+  }
+
 
   /**
    * Start capturing audio
@@ -54,7 +78,9 @@ export class AudioCapture {
       this.processorNode.onaudioprocess = (e) => {
         if (!this.isCapturing) return;
 
-        const inputData = e.inputBuffer.getChannelData(0);
+        const inputDataRaw = e.inputBuffer.getChannelData(0);
+        // Resample to 16k if needed
+        const inputData = this.downsampleTo16k(inputDataRaw, this.audioContext.sampleRate);
         
         // Convert Float32 [-1, 1] to Int16 PCM16
         const pcm16 = new Int16Array(inputData.length);
