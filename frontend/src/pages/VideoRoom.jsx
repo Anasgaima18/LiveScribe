@@ -91,7 +91,7 @@ const VideoRoom = () => {
     };
   }, [user, roomId, fetchToken, navigate]);
 
-  const handleDisconnect = useCallback(async () => {
+  const handleLeaveCall = useCallback(async () => {
     setIsConnected(false);
     
     if (callId) {
@@ -109,6 +109,13 @@ const VideoRoom = () => {
       }
     }, 300);
   }, [callId, navigate]);
+  
+  const handleDisconnected = useCallback(() => {
+    // Only log disconnections, don't navigate away
+    // This allows LiveKit to reconnect automatically
+    console.log('[VideoRoom] Temporarily disconnected from LiveKit');
+    setIsConnected(false);
+  }, []);
   
   const handleConnected = useCallback(() => {
     setIsConnected(true);
@@ -183,7 +190,7 @@ const VideoRoom = () => {
         data-lk-theme="default"
         style={{ height: '100vh' }}
         onConnected={handleConnected}
-        onDisconnected={handleDisconnect}
+        onDisconnected={handleDisconnected}
         onError={handleError}
         connectOptions={{
           autoSubscribe: true,
@@ -229,7 +236,7 @@ const VideoRoom = () => {
             >
               {showTranscripts ? 'Hide Transcripts' : 'Show Transcripts'}
             </button>
-            <button onClick={handleDisconnect} className="btn-leave">
+            <button onClick={handleLeaveCall} className="btn-leave">
               Leave Call
             </button>
           </div>
