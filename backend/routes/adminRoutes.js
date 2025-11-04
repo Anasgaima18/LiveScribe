@@ -4,13 +4,15 @@ import {
   adminLogin,
   getDashboardStats,
   getAllUsers,
+  getAllAlerts,
   getActiveSessions,
   getCallAnalytics,
   getAlertAnalytics,
   manageUser
 } from '../controllers/adminController.js';
-import { runHealthChecks } from '../utils/healthCheck.js';
+import { runHealthChecks, testOpenAIConnection, testSarvamConnection } from '../utils/healthCheck.js';
 import { testLiveKitConnection, getLiveKitStatus } from '../utils/livekitDiagnostics.js';
+import { runManualCleanup } from '../utils/dataRetention.js';
 
 const router = express.Router();
 
@@ -51,6 +53,13 @@ router.get('/users', protect, adminOnly, getAllUsers);
  * @access  Admin
  */
 router.put('/users/:userId', protect, adminOnly, manageUser);
+
+/**
+ * @route   GET /api/admin/alerts
+ * @desc    Get all alerts with filtering
+ * @access  Admin
+ */
+router.get('/alerts', protect, adminOnly, getAllAlerts);
 
 /**
  * @route   GET /api/admin/sessions/active
@@ -114,5 +123,41 @@ router.get('/livekit/status', protect, adminOnly, async (req, res) => {
     res.status(500).json({ message: 'Failed to get LiveKit status', error: error.message });
   }
 });
+
+/**
+ * @route   GET /api/admin/health/openai
+ * @desc    Test OpenAI API connectivity
+ * @access  Admin
+ */
+router.get('/health/openai', protect, adminOnly, async (req, res) => {
+  try {
+    const result = await testOpenAIConnection();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route   GET /api/admin/health/sarvam
+ * @desc    Test Sarvam AI API connectivity
+ * @access  Admin
+ */
+router.get('/health/sarvam', protect, adminOnly, async (req, res) => {
+  try {
+    const result = await testSarvamConnection();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route   POST /api/admin/cleanup
+ * @desc    Manually trigger data cleanup (transcripts, alerts, calls)
+ * @access  Admin
+ * @query   ?transcriptDays=90&alertDays=180&callDays=365
+ */
+router.post('/cleanup', protect, adminOnly, runManualCleanup);
 
 export default router;

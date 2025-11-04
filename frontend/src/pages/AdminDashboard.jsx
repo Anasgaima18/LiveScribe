@@ -9,6 +9,8 @@ const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
   const [callAnalytics, setCallAnalytics] = useState(null);
   const [alertAnalytics, setAlertAnalytics] = useState(null);
+  const [alerts, setAlerts] = useState([]);
+  const [alertFilter, setAlertFilter] = useState('all'); // all, critical, high, medium, low
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,6 +44,15 @@ const AdminDashboard = () => {
       setUsers(response.data.users);
     } catch (error) {
       console.error('Failed to fetch users:', error);
+    }
+  };
+
+  const fetchAlerts = async () => {
+    try {
+      const response = await api.get('/admin/alerts');
+      setAlerts(response.data.alerts || []);
+    } catch (error) {
+      console.error('Failed to fetch alerts:', error);
     }
   };
 
@@ -123,6 +134,15 @@ const AdminDashboard = () => {
           onClick={() => setActiveTab('analytics')}
         >
           Analytics
+        </button>
+        <button
+          className={activeTab === 'alerts' ? 'active' : ''}
+          onClick={() => {
+            setActiveTab('alerts');
+            fetchAlerts();
+          }}
+        >
+          Alerts
         </button>
       </div>
 
@@ -254,6 +274,87 @@ const AdminDashboard = () => {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'alerts' && (
+          <div className="alerts-section">
+            <div className="alerts-header">
+              <h2>Security Alerts</h2>
+              <div className="alert-filters">
+                <button 
+                  className={alertFilter === 'all' ? 'active' : ''}
+                  onClick={() => setAlertFilter('all')}
+                >
+                  All
+                </button>
+                <button 
+                  className={alertFilter === 'critical' ? 'active critical' : ''}
+                  onClick={() => setAlertFilter('critical')}
+                >
+                  Critical
+                </button>
+                <button 
+                  className={alertFilter === 'high' ? 'active high' : ''}
+                  onClick={() => setAlertFilter('high')}
+                >
+                  High
+                </button>
+                <button 
+                  className={alertFilter === 'medium' ? 'active medium' : ''}
+                  onClick={() => setAlertFilter('medium')}
+                >
+                  Medium
+                </button>
+                <button 
+                  className={alertFilter === 'low' ? 'active low' : ''}
+                  onClick={() => setAlertFilter('low')}
+                >
+                  Low
+                </button>
+              </div>
+            </div>
+            
+            <div className="alerts-list">
+              {alerts
+                .filter(alert => alertFilter === 'all' || alert.severity.toLowerCase() === alertFilter)
+                .map(alert => (
+                  <div key={alert._id} className={`alert-card severity-${alert.severity.toLowerCase()}`}>
+                    <div className="alert-card-header">
+                      <span className={`severity-badge ${alert.severity.toLowerCase()}`}>
+                        {alert.severity}
+                      </span>
+                      <span className="alert-time">
+                        {new Date(alert.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="alert-card-body">
+                      <p className="alert-user">
+                        <strong>User:</strong> {alert.userId?.name || 'Unknown'} ({alert.userId?.email})
+                      </p>
+                      <p className="alert-matched">
+                        <strong>Flagged:</strong> {alert.matchedWords?.join(', ') || alert.detectedIssues?.join(', ')}
+                      </p>
+                      <p className="alert-context">
+                        <strong>Context:</strong> "{alert.context}"
+                      </p>
+                      {alert.aiAnalysis && (
+                        <div className="alert-ai-analysis">
+                          <strong>AI Analysis:</strong>
+                          <p>{alert.aiAnalysis.explanation}</p>
+                          <p className="confidence">Confidence: {alert.aiAnalysis.confidence}%</p>
+                        </div>
+                      )}
+                      <p className="alert-call">
+                        <strong>Call ID:</strong> {alert.callId}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              {alerts.filter(alert => alertFilter === 'all' || alert.severity.toLowerCase() === alertFilter).length === 0 && (
+                <p className="no-data">No alerts found for this filter</p>
+              )}
+            </div>
           </div>
         )}
       </div>

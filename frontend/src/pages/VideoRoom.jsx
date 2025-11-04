@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useSocket } from '../context/SocketContext.jsx';
 import api from '../utils/api';
 import TranscriptPanel from '../components/TranscriptPanel.jsx';
+import ConsentModal from '../components/ConsentModal.jsx';
 import RealtimeTranscription from '../components/RealtimeTranscription.jsx';
 import { installAllErrorSuppressors } from '../utils/errorSuppressor.js';
 import { diagnoseConnectionFailure } from '../utils/livekitDiagnostics.js';
@@ -23,6 +24,8 @@ const VideoRoom = () => {
   const [error, setError] = useState('');
   const [callId, setCallId] = useState(null);
   const [showTranscripts, setShowTranscripts] = useState(false);
+  const [hasConsent, setHasConsent] = useState(false);
+  const [showConsent, setShowConsent] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const isMountedRef = useRef(true);
 
@@ -186,6 +189,11 @@ const VideoRoom = () => {
 
   return (
     <div className="video-room-container">
+      <ConsentModal
+        open={showConsent}
+        onAccept={() => { setHasConsent(true); setShowConsent(false); }}
+        onDecline={() => { setHasConsent(false); setShowConsent(false); }}
+      />
       {!isConnected && (
         <div className="connection-status">
           <p>🔄 Connecting to LiveKit server...</p>
@@ -264,7 +272,7 @@ const VideoRoom = () => {
         {showTranscripts && callId && (
           <div className="transcript-overlay">
             {/* Realtime Transcription controls */}
-            <RealtimeTranscription roomId={roomId} callId={callId} enabled={true} />
+            <RealtimeTranscription roomId={roomId} callId={callId} enabled={hasConsent} />
             <TranscriptPanel callId={callId} />
           </div>
         )}

@@ -5,17 +5,24 @@ const segmentSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // Optional timing fields when available
   startTime: {
     type: Number,
-    required: true
+    required: false
   },
   endTime: {
     type: Number,
-    required: true
+    required: false
   },
+  // For realtime transcripts we often only have a wall-clock timestamp
   timestamp: {
     type: Date,
     default: Date.now
+  },
+  // Persist only final segments (isPartial=false)
+  isPartial: {
+    type: Boolean,
+    default: false
   }
 }, { _id: false });
 

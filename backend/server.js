@@ -16,12 +16,14 @@ import connectDB from './config/db.js';
 import logger from './config/logger.js';
 import { initSocket } from './config/socket.js';
 import { errorHandler, notFound, handleUnhandledRejection, handleUncaughtException } from './middleware/errorHandler.js';
+import { scheduleCleanupJobs } from './utils/dataRetention.js';
 
 import authRoutes from './routes/authRoutes.js';
 import livekitRoutes from './routes/livekitRoutes.js';
 import callRoutes from './routes/callRoutes.js';
 import translationRoutes from './routes/translationRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import webhookRoutes from './routes/webhookRoutes.js';
 
 // Handle uncaught exceptions
 handleUncaughtException();
@@ -171,6 +173,7 @@ app.use('/api/livekit', livekitRoutes);
 app.use('/api/calls', callRoutes);
 app.use('/api/translation', translationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -221,6 +224,11 @@ server.listen(PORT, () => {
   logger.info(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
   logger.info(`📚 API Documentation available at http://localhost:${PORT}/api-docs`);
   logger.info(`🔌 Socket.IO initialized and ready`);
+  
+  // Schedule automated cleanup jobs for privacy compliance
+  if (process.env.NODE_ENV === 'production' || process.env.ENABLE_CLEANUP_JOBS === 'true') {
+    scheduleCleanupJobs();
+  }
 });
 
 // Graceful shutdown

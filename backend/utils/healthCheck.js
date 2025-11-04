@@ -217,4 +217,83 @@ export async function getHealthStatus() {
   };
 }
 
+/**
+ * Test OpenAI API connectivity
+ */
+export async function testOpenAIConnection() {
+  try {
+    const { default: OpenAI } = await import('openai');
+    const apiKey = process.env.OPENAI_API_KEY;
+    
+    if (!apiKey) {
+      return { success: false, error: 'API key not configured' };
+    }
+
+    const isOpenRouter = apiKey.startsWith('sk-or-v1');
+    const client = new OpenAI({
+      apiKey,
+      baseURL: isOpenRouter ? 'https://openrouter.ai/api/v1' : undefined,
+    });
+
+    const start = Date.now();
+    const completion = await client.chat.completions.create({
+      model: isOpenRouter ? 'openai/gpt-3.5-turbo' : 'gpt-3.5-turbo',
+      messages: [{ role: 'user', content: 'Hello' }],
+      max_tokens: 5,
+    });
+    const latency = Date.now() - start;
+
+    return {
+      success: true,
+      latency: `${latency}ms`,
+      model: completion.model,
+      provider: isOpenRouter ? 'OpenRouter' : 'OpenAI',
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+      code: error.code,
+    };
+  }
+}
+
+/**
+ * Test Sarvam AI API connectivity
+ */
+export async function testSarvamConnection() {
+  try {
+    const apiKey = process.env.SARVAM_API_KEY;
+    
+    if (!apiKey) {
+      return { success: false, error: 'API key not configured' };
+    }
+
+    // Simple API key format validation
+    const response = await fetch('https://api.sarvam.ai/health', {
+      headers: {
+        'api-subscription-key': apiKey,
+      },
+    });
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: `HTTP ${response.status}: ${response.statusText}`,
+      };
+    }
+
+    return {
+      success: true,
+      status: 'API key accepted',
+      endpoint: 'https://api.sarvam.ai',
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
 export default healthChecks;

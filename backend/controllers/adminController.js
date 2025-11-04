@@ -327,6 +327,46 @@ export const getAlertAnalytics = async (req, res) => {
 };
 
 /**
+ * @desc    Get all alerts with filtering
+ * @route   GET /api/admin/alerts
+ * @access  Admin
+ */
+export const getAllAlerts = async (req, res) => {
+  try {
+    const { page = 1, limit = 50, severity, startDate, endDate } = req.query;
+
+    const query = {};
+    if (severity) {
+      query.severity = severity.toUpperCase();
+    }
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) query.createdAt.$lte = new Date(endDate);
+    }
+
+    const alerts = await Alert.find(query)
+      .populate('userId', 'name email')
+      .populate('callId', 'roomId startedAt')
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const count = await Alert.countDocuments(query);
+
+    res.json({
+      alerts,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page,
+      totalAlerts: count
+    });
+  } catch (error) {
+    logger.error('Get alerts error:', error);
+    res.status(500).json({ message: 'Failed to fetch alerts', error: error.message });
+  }
+};
+
+/**
  * @desc    Manage user (ban, unban, delete)
  * @route   PUT /api/admin/users/:userId
  * @access  Admin (with permissions)
@@ -378,6 +418,7 @@ export default {
   adminLogin,
   getDashboardStats,
   getAllUsers,
+  getAllAlerts,
   getActiveSessions,
   getCallAnalytics,
   getAlertAnalytics,

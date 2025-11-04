@@ -2,6 +2,7 @@ import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import logger from './logger.js';
 import User from '../models/User.js';
+import Transcript from '../models/Transcript.js';
 
 let io;
 
@@ -182,7 +183,11 @@ export const initSocket = (server) => {
     let sarvamSession = null;
     socket.on('transcription:start', async ({ roomId, language = 'en' }) => {
       try {
-        if (process.env.TRANSCRIPTION_PROVIDER !== 'sarvam') return;
+        if (process.env.TRANSCRIPTION_PROVIDER !== 'sarvam') {
+          logger.warn('Transcription requested but provider not configured (TRANSCRIPTION_PROVIDER!=sarvam)');
+          socket.emit('transcript:status', { status: 'disabled', reason: 'provider_not_configured' });
+          return;
+        }
         const { createSarvamClient } = await import('../utils/transcription/sarvamClient.js');
         sarvamSession = createSarvamClient();
         sarvamSession.on('partial', (data) => {
@@ -201,10 +206,15 @@ export const initSocket = (server) => {
         });
         sarvamSession.on('error', (err) => {
           logger.error('Sarvam session error:', err);
+          socket.emit('transcript:status', { status: 'error', reason: err.message });
+        });
+        sarvamSession.on('open', () => {
+          socket.emit('transcript:status', { status: 'active', provider: 'sarvam' });
         });
         sarvamSession.connect();
       } catch (e) {
         logger.error('Failed to start transcription:', e);
+        socket.emit('transcript:status', { status: 'error', reason: e.message });
       }
     });
 
@@ -217,6 +227,37 @@ export const initSocket = (server) => {
         }
       } catch (e) {
         logger.error('transcription:audio error:', e);
+      }
+    });
+
+    // Browser-based STT fallback: client sends recognized text directly
+    socket.on('transcription:text', async ({ roomId, callId, text, isPartial, timestamp }) => {
+      try {
+        const segment = {
+          text: text || '',
+          timestamp: timestamp ? new Date(timestamp) : new Date(),
+          isPartial: !!isPartial,
+        };
+
+        // Broadcast to room participants
+        io.to(`call:${roomId}`).emit('transcript:new', {
+          userId,
+          userName: socket.user.name,
+          segment,
+        });
+
+        // Persist only final segments if callId is provided
+        if (callId && !segment.isPartial) {
+          let doc = await Transcript.findOne({ callId, userId });
+          if (!doc) {
+            doc = await Transcript.create({ callId, userId, segments: [segment] });
+          } else {
+            doc.segments.push(segment);
+            await doc.save();
+          }
+        }
+      } catch (e) {
+        logger.error('transcription:text error:', e);
       }
     });
 
