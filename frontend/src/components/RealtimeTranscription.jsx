@@ -128,21 +128,23 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart]);
 
-  if (!enabled) {
-    return null;
-  }
-
   return (
     <div className="realtime-transcription">
       <div className="rt-header">
         <h4>Realtime Transcription</h4>
         <div className="rt-status">{`Mode: ${providerName || mode} | Status: ${providerStatus}`}</div>
+        {!enabled && (
+          <div className="rt-warning" style={{ color: '#ff9500', fontSize: '13px', marginTop: '4px' }}>
+            ⚠️ Consent required - Reload page to accept recording consent
+          </div>
+        )}
         <div className="rt-controls">
           {!isCapturing ? (
             <button
               onClick={handleStart}
-              disabled={status === 'starting'}
+              disabled={status === 'starting' || !enabled}
               className="btn-start"
+              title={!enabled ? 'Accept consent to enable transcription' : 'Start transcription'}
             >
               {status === 'starting' ? 'Starting...' : '🎤 Start'}
             </button>
