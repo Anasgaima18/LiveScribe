@@ -202,12 +202,40 @@ export const initSocket = (server) => {
             segment: { text: data.text, timestamp: data.timestamp, isPartial: true },
           });
         });
-        sarvamSession.on('final', (data) => {
+        sarvamSession.on('final', async (data) => {
+          const segment = { text: data.text, timestamp: data.timestamp, isPartial: false };
+          
+          // Broadcast to room participants
           io.to(`call:${roomId}`).emit('transcript:new', {
             userId,
             userName: socket.user.name,
-            segment: { text: data.text, timestamp: data.timestamp, isPartial: false },
+            segment,
           });
+
+          // Persist final transcript to database
+          try {
+            // Find the call to get callId
+            const Call = (await import('../models/Call.js')).default;
+            const call = await Call.findOne({ roomId });
+            
+            if (call) {
+              const Transcript = (await import('../models/Transcript.js')).default;
+              let doc = await Transcript.findOne({ callId: call._id, userId });
+              if (!doc) {
+                doc = await Transcript.create({ 
+                  callId: call._id, 
+                  userId, 
+                  segments: [{ text: data.text, timestamp: new Date(data.timestamp) }] 
+                });
+              } else {
+                doc.segments.push({ text: data.text, timestamp: new Date(data.timestamp) });
+                await doc.save();
+              }
+              logger.info(`Saved transcript for user ${socket.user.name} in call ${call._id}`);
+            }
+          } catch (err) {
+            logger.error('Failed to save Sarvam transcript:', err);
+          }
         });
         sarvamSession.on('error', (err) => {
           logger.error('Sarvam session error:', err);
