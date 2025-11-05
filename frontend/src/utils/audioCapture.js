@@ -129,7 +129,11 @@ export class AudioCapture {
       };
 
       this.sourceNode.connect(this.processorNode);
-      if (this.processorNode.connect) {
+      
+      // Only connect to destination if it's ScriptProcessorNode (not AudioWorkletNode)
+      // AudioWorkletNode with 0 outputs doesn't need connection to destination
+      if (this.processorNode.onaudioprocess) {
+        // ScriptProcessorNode - needs connection to destination
         this.processorNode.connect(this.audioContext.destination);
       }
 
