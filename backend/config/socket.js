@@ -192,7 +192,9 @@ export const initSocket = (server) => {
           return;
         }
         const { createSarvamClient } = await import('../utils/transcription/sarvamClient.js');
-        sarvamSession = createSarvamClient();
+        // Map language codes: 'en' -> 'en-IN', 'hi' -> 'hi-IN', etc.
+        const languageCode = language === 'en' ? 'en-IN' : language === 'hi' ? 'hi-IN' : `${language}-IN`;
+        sarvamSession = createSarvamClient({ language: languageCode });
         sarvamSession.on('partial', (data) => {
           io.to(`call:${roomId}`).emit('transcript:new', {
             userId,
