@@ -31,6 +31,13 @@ handleUncaughtException();
 // Load environment variables
 dotenv.config();
 
+// Log transcription configuration on startup
+console.log('🎤 Transcription Config:', {
+  provider: process.env.TRANSCRIPTION_PROVIDER,
+  sarvamKeySet: !!process.env.SARVAM_API_KEY,
+  mode: process.env.NODE_ENV
+});
+
 // Connect to MongoDB
 connectDB();
 

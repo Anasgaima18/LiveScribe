@@ -183,8 +183,11 @@ export const initSocket = (server) => {
     let sarvamSession = null;
     socket.on('transcription:start', async ({ roomId, language = 'en' }) => {
       try {
-        if (process.env.TRANSCRIPTION_PROVIDER !== 'sarvam') {
-          logger.warn('Transcription requested but provider not configured (TRANSCRIPTION_PROVIDER!=sarvam)');
+        const provider = process.env.TRANSCRIPTION_PROVIDER;
+        logger.info(`Transcription start requested. Provider: "${provider}", Expected: "sarvam"`);
+        
+        if (provider !== 'sarvam') {
+          logger.warn(`Transcription provider not configured. Current: "${provider}", Expected: "sarvam"`);
           socket.emit('transcript:status', { status: 'disabled', reason: 'provider_not_configured' });
           return;
         }
