@@ -70,48 +70,70 @@ export class AudioCapture {
 
       this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
 
-      // Use ScriptProcessorNode (deprecated but widely supported)
-      // Buffer size: 4096 samples = ~256ms at 16kHz
-      const bufferSize = 4096;
-      this.processorNode = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
-
-      this.processorNode.onaudioprocess = (e) => {
-        if (!this.isCapturing) return;
-
-        const inputDataRaw = e.inputBuffer.getChannelData(0);
-        // Resample to 16k if needed
-        const inputData = this.downsampleTo16k(inputDataRaw, this.audioContext.sampleRate);
+      // Try to use modern AudioWorklet, fallback to ScriptProcessorNode
+      try {
+        await this.audioContext.audioWorklet.addModule('/audio-worklet-processor.js');
         
-        // Convert Float32 [-1, 1] to Int16 PCM16
-        const pcm16 = new Int16Array(inputData.length);
-        for (let i = 0; i < inputData.length; i++) {
-          const s = Math.max(-1, Math.min(1, inputData[i]));
-          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-        }
+        this.processorNode = new AudioWorkletNode(this.audioContext, 'audio-capture-processor', {
+          numberOfInputs: 1,
+          numberOfOutputs: 0,
+          channelCount: 1,
+        });
 
-        // Convert to base64 (browser-safe, no Node Buffer)
-        const toBase64 = (arrayBuffer) => {
-          const bytes = new Uint8Array(arrayBuffer);
-          let binary = '';
-          const chunkSize = 0x8000; // process in chunks to avoid call stack limits
-          for (let i = 0; i < bytes.length; i += chunkSize) {
-            const chunk = bytes.subarray(i, i + chunkSize);
-            binary += String.fromCharCode.apply(null, chunk);
+        this.processorNode.port.onmessage = (event) => {
+          if (event.data.type === 'audiodata' && this.isCapturing) {
+            const pcm16 = new Int16Array(event.data.data);
+            const base64 = this._arrayBufferToBase64(pcm16.buffer);
+            this.onDataCallback(base64);
           }
-          return btoa(binary);
         };
-        const base64 = toBase64(pcm16.buffer);
+        
+        console.log('Audio capture started: 16kHz mono PCM16 (AudioWorklet)');
+      } catch (workletError) {
+        // Fallback to ScriptProcessorNode for older browsers
+        console.warn('AudioWorklet not supported, using ScriptProcessorNode');
+        const bufferSize = 4096;
+        this.processorNode = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
 
-        if (this.onDataCallback) {
+        this.processorNode.onaudioprocess = (e) => {
+          if (!this.isCapturing) return;
+
+          const inputDataRaw = e.inputBuffer.getChannelData(0);
+          const inputData = this.downsampleTo16k(inputDataRaw, this.audioContext.sampleRate);
+          
+          // Convert Float32 [-1, 1] to Int16 PCM16
+          const pcm16 = new Int16Array(inputData.length);
+          for (let i = 0; i < inputData.length; i++) {
+            const s = Math.max(-1, Math.min(1, inputData[i]));
+            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+
+          // Convert to base64
+          const base64 = this._arrayBufferToBase64(pcm16.buffer);
           this.onDataCallback(base64);
+        };
+        
+        console.log('Audio capture started: 16kHz mono PCM16 (ScriptProcessorNode)');
+      }
+
+      // Helper function for base64 conversion
+      this._arrayBufferToBase64 = (arrayBuffer) => {
+        const bytes = new Uint8Array(arrayBuffer);
+        let binary = '';
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          const chunk = bytes.subarray(i, i + chunkSize);
+          binary += String.fromCharCode.apply(null, chunk);
         }
+        return btoa(binary);
       };
 
       this.sourceNode.connect(this.processorNode);
-      this.processorNode.connect(this.audioContext.destination);
+      if (this.processorNode.connect) {
+        this.processorNode.connect(this.audioContext.destination);
+      }
 
       this.isCapturing = true;
-      console.log('Audio capture started: 16kHz mono PCM16');
     } catch (error) {
       console.error('Failed to start audio capture:', error);
       if (this.onErrorCallback) {
