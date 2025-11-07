@@ -23,7 +23,7 @@ export class SarvamSTTClient {
     
     this.apiKey = apiKey;
     this.baseURL = options.baseURL || SARVAM_BASE_URL;
-    this.language = options.language || 'hi-IN'; // Default to Hindi
+    this.language = options.language || 'en-IN'; // Default to English
     this.model = options.model || 'saarika:v2.5';
     this.withTimestamps = options.withTimestamps !== false;
     
@@ -195,7 +195,7 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.audioChunks = [];
     this.chunkSize = options.chunkSize || 4096 * 10; // buffering unit
     this.currentSize = 0;
-    this.language = options.language || 'hi-IN';
+    this.language = options.language || 'en-IN'; // Default to English
     this.isActive = false;
   }
 
@@ -307,7 +307,7 @@ export function createSarvamClient(options = {}) {
   }
 
   return new SarvamRealtimeClient(apiKey, {
-    language: options.language || 'hi-IN',
+    language: options.language || 'en-IN', // Default to English
     ...options,
   });
 }
