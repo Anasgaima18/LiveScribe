@@ -8,6 +8,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 import { Readable } from 'stream';
 import EventEmitter from 'events';
+import logger from '../../config/logger.js';
 
 const SARVAM_BASE_URL = 'https://api.sarvam.ai';
 
