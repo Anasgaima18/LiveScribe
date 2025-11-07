@@ -191,16 +191,29 @@ export const initSocket = (server) => {
     socket.on('transcription:start', async ({ roomId, language = 'en' }) => {
       try {
         const provider = process.env.TRANSCRIPTION_PROVIDER;
-        logger.info(`Transcription start requested. Provider: "${provider}", Expected: "sarvam"`);
+        const apiKey = process.env.SARVAM_API_KEY;
+        
+        logger.info(`Transcription start requested for room ${roomId}`);
+        logger.info(`Provider: "${provider}", Language: "${language}"`);
+        logger.info(`API Key configured: ${apiKey ? 'YES (length: ' + apiKey.length + ')' : 'NO'}`);
         
         if (provider !== 'sarvam') {
           logger.warn(`Transcription provider not configured. Current: "${provider}", Expected: "sarvam"`);
           socket.emit('transcript:status', { status: 'disabled', reason: 'provider_not_configured' });
           return;
         }
+        
+        if (!apiKey) {
+          logger.error('SARVAM_API_KEY environment variable not set!');
+          socket.emit('transcript:status', { status: 'error', reason: 'api_key_missing' });
+          return;
+        }
+        
         const { createSarvamClient } = await import('../utils/transcription/sarvamClient.js');
         // Map language codes: 'en' -> 'en-IN', 'hi' -> 'hi-IN', etc.
         const languageCode = language === 'en' ? 'en-IN' : language === 'hi' ? 'hi-IN' : `${language}-IN`;
+        
+        logger.info(`Creating Sarvam client with language: ${languageCode}`);
         sarvamSession = createSarvamClient({ language: languageCode });
         sarvamSession.on('partial', (data) => {
           io.to(`call:${roomId}`).emit('transcript:new', {
@@ -249,9 +262,13 @@ export const initSocket = (server) => {
           socket.emit('transcript:status', { status: 'error', reason: err.message });
         });
         sarvamSession.on('open', () => {
+          logger.info(`Sarvam transcription started for user ${socket.user.name}`);
           socket.emit('transcript:status', { status: 'active', provider: 'sarvam' });
         });
+        
+        // Start the session
         sarvamSession.connect();
+        logger.info(`Sarvam client created and connecting for language: ${languageCode}`);
       } catch (e) {
         logger.error('Failed to start transcription:', e);
         socket.emit('transcript:status', { status: 'error', reason: e.message });
@@ -264,6 +281,8 @@ export const initSocket = (server) => {
           // Expect chunk as base64-encoded PCM16 mono 16kHz
           const buf = Buffer.from(chunk, 'base64');
           sarvamSession.sendAudio(buf);
+        } else if (!sarvamSession) {
+          logger.warn('Received audio chunk but sarvamSession is not initialized');
         }
       } catch (e) {
         logger.error('transcription:audio error:', e);

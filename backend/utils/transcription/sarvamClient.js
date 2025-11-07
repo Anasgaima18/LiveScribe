@@ -221,8 +221,13 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.audioChunks.push(pcm16Buffer);
     this.currentSize += pcm16Buffer.length;
 
-    // When we have ~1-2 seconds of audio, transcribe it
-    if (this.currentSize >= this.chunkSize * 4) {
+    // Reduced threshold for faster response: chunkSize * 2 = ~5 seconds
+    // Previously was chunkSize * 4 = ~10 seconds which was too slow
+    const threshold = this.chunkSize * 2;
+    logger.debug(`Audio accumulated: ${this.currentSize}/${threshold} bytes`);
+    
+    if (this.currentSize >= threshold) {
+      logger.info(`Processing ${this.currentSize} bytes of audio`);
       await this._processChunks();
     }
   }
@@ -232,16 +237,21 @@ export class SarvamRealtimeClient extends EventEmitter {
 
     try {
       const audioBuffer = Buffer.concat(this.audioChunks);
+      logger.info(`Processing ${audioBuffer.length} bytes for transcription (${this.audioChunks.length} chunks)`);
+      
       this.audioChunks = [];
       this.currentSize = 0;
 
       // Convert raw PCM16 to WAV format for Sarvam
       const wavBuffer = this._pcm16ToWav(audioBuffer, 16000, 1);
+      logger.debug(`Converted to WAV: ${wavBuffer.length} bytes`);
 
       const result = await this.sttClient.transcribe(wavBuffer, {
         language: this.language,
         withTimestamps: false,
       });
+
+      logger.info(`Transcription result: "${result.transcript}" (language: ${result.language})`);
 
       if (result.transcript && result.transcript.trim()) {
         this.emit('final', {
@@ -249,8 +259,11 @@ export class SarvamRealtimeClient extends EventEmitter {
           timestamp: result.timestamp,
           language: result.language,
         });
+      } else {
+        logger.warn('Empty transcript received from Sarvam API');
       }
     } catch (error) {
+      logger.error('Error processing audio chunks:', error);
       this.emit('error', error);
     }
   }

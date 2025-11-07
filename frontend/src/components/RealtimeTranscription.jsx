@@ -22,6 +22,7 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
 
     // Listen for realtime transcript updates
     const handleTranscript = ({ userId, userName, segment }) => {
+      console.log('Received transcript:', { userId, userName, segment });
       setTranscripts((prev) => {
         // If partial, replace last partial with new partial
         // If final, append as new entry
@@ -34,10 +35,26 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
       });
     };
 
+    // Listen for provider status updates
+    const handleStatus = ({ status, provider, reason }) => {
+      console.log('Transcription status:', { status, provider, reason });
+      setProviderStatus(status);
+      if (provider) setProviderName(provider);
+      
+      if (status === 'active') {
+        setStatus('active');
+      } else if (status === 'error') {
+        setStatus('idle');
+        console.error('Transcription error:', reason);
+      }
+    };
+
     socket.on('transcript:new', handleTranscript);
+    socket.on('transcript:status', handleStatus);
 
     return () => {
       socket.off('transcript:new', handleTranscript);
+      socket.off('transcript:status', handleStatus);
     };
   }, [socket, enabled]);
 
@@ -78,18 +95,25 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
         setProviderName('browser');
       } else {
         // Server-side (Sarvam) mode
+        console.log('Starting Sarvam transcription for room:', roomId);
         socket.emit('transcription:start', { roomId, language: 'en' });
+        
         // Start audio capture and stream chunks to backend
         await startCapture((base64Chunk) => {
-          socket.emit('transcription:audio', { chunk: base64Chunk });
+          if (base64Chunk && base64Chunk.length > 0) {
+            socket.emit('transcription:audio', { chunk: base64Chunk });
+          }
         });
+        
         setProviderName('sarvam');
+        console.log('Audio capture started, waiting for backend confirmation...');
       }
 
       setStatus('active');
     } catch (err) {
       console.error('Failed to start realtime transcription:', err);
       setStatus('idle');
+      setProviderStatus('error');
     }
   };
 
@@ -167,7 +191,13 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
       {isCapturing && (
         <div className="rt-indicator">
           <span className="pulse-dot"></span>
-          Recording...
+          Recording... {providerStatus === 'active' ? `(${providerName} active)` : '(waiting for server...)'}
+        </div>
+      )}
+
+      {providerStatus === 'error' && (
+        <div className="rt-error">
+          ⚠️ Transcription service error. Check console for details.
         </div>
       )}
 
