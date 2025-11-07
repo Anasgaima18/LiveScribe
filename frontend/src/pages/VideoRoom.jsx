@@ -23,7 +23,7 @@ const VideoRoom = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [callId, setCallId] = useState(null);
-  const [showTranscripts, setShowTranscripts] = useState(false);
+  const [showTranscripts, setShowTranscripts] = useState(true); // Auto-show transcripts
   const [hasConsent, setHasConsent] = useState(true); // Auto-accept for now
   const [showConsent, setShowConsent] = useState(false); // Hide consent modal for testing
   const [isConnected, setIsConnected] = useState(false);

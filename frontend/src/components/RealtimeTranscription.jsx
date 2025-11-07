@@ -120,13 +120,17 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
     return () => socket.off('transcript:status', onStatus);
   }, [socket]);
 
-  // Auto start if enabled
+  // Auto start transcription when component mounts
   useEffect(() => {
-    if (autoStart && status === 'idle') {
-      handleStart();
+    if (enabled && roomId && status === 'idle' && socket) {
+      // Small delay to ensure LiveKit connection is established
+      const timer = setTimeout(() => {
+        handleStart();
+      }, 2000);
+      return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoStart]);
+  }, [enabled, roomId, socket]);
 
   return (
     <div className="realtime-transcription">
