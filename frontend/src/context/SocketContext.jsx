@@ -42,8 +42,11 @@ export const SocketProvider = ({ children }) => {
         console.log('[SOCKET] Connected:', socketInstance.id);
       });
 
-      socketInstance.on('disconnect', () => {
-        console.log('[SOCKET] Disconnected');
+      socketInstance.on('disconnect', (reason) => {
+        console.log('[SOCKET] Disconnected:', reason);
+        if (socketInstance.io?.engine?.transport) {
+          console.log('[SOCKET] Last transport:', socketInstance.io.engine.transport.name);
+        }
       });
 
       // Helpful diagnostics
@@ -59,11 +62,12 @@ export const SocketProvider = ({ children }) => {
       socketInstance.on('connect_error', (err) => {
         console.warn('[SOCKET] Connect error:', err?.message || err);
         console.warn('[SOCKET] Connect error details:', err);
-        
+
         // If authentication fails, log more details
         if (err?.message?.includes('Authentication') || err?.message?.includes('token')) {
           console.error('[SOCKET] Authentication failed! Token may be invalid or expired.');
-        }      });
+        }
+      });
 
       return () => {
         socketInstance.disconnect();

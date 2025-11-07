@@ -343,12 +343,12 @@ export const initSocket = (server) => {
       }
     });
 
-    socket.on('transcription:audio', ({ chunk }) => {
+    socket.on('transcription:audio', async ({ chunk }) => {
       try {
         if (sarvamSession && chunk) {
           // Expect chunk as base64-encoded PCM16 mono 16kHz
           const buf = Buffer.from(chunk, 'base64');
-          sarvamSession.sendAudio(buf);
+          await sarvamSession.sendAudio(buf);
         } else if (!sarvamSession) {
           logger.warn('Received audio chunk but sarvamSession is not initialized');
         }
@@ -388,9 +388,11 @@ export const initSocket = (server) => {
       }
     });
 
-    socket.on('transcription:stop', () => {
+    socket.on('transcription:stop', async () => {
       try {
-        if (sarvamSession) sarvamSession.close();
+        if (sarvamSession) {
+          await sarvamSession.close();
+        }
         sarvamSession = null;
       } catch (e) {
         logger.error('Failed to stop transcription:', e);
@@ -407,12 +409,22 @@ export const initSocket = (server) => {
     });
 
     // Handle disconnection
-    socket.on('disconnect', (reason) => {
+    socket.on('disconnect', async (reason) => {
       logger.info(`User disconnected: ${socket.user.name} (${userId})`);
       logger.info(`Disconnect reason: ${reason}`);
-      
+
+      try {
+        if (sarvamSession) {
+          await sarvamSession.close();
+        }
+      } catch (closeErr) {
+        logger.error('Error while closing Sarvam session on disconnect:', closeErr);
+      } finally {
+        sarvamSession = null;
+      }
+
       activeUsers.delete(userId);
-      
+
       socket.broadcast.emit('user:offline', {
         userId,
         name: socket.user.name,
