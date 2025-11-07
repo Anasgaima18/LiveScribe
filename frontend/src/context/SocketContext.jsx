@@ -22,16 +22,18 @@ export const SocketProvider = ({ children }) => {
       const socketInstance = io(socketUrl, {
         auth: { token: user.token },
         autoConnect: true,
-        // Allow Engine.IO to fall back to polling first, then upgrade to websocket
-        transports: ['websocket', 'polling'],
+        // Start with polling for better Render compatibility, then upgrade to WebSocket
+        transports: ['polling', 'websocket'],
         withCredentials: true,
-        path: '/socket.io',
+        path: '/socket.io/',
         reconnection: true,
-        reconnectionAttempts: 10,
-        reconnectionDelay: 500,
-        reconnectionDelayMax: 5000,
-        timeout: 20000,
+        reconnectionAttempts: 15,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 10000,
+        timeout: 45000,
         forceNew: true,
+        upgrade: true,
+        rememberUpgrade: true,
       });
       socketRef.current = socketInstance;
       setSocket(socketInstance);

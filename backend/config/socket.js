@@ -23,6 +23,13 @@ export const initSocket = (server) => {
       credentials: true
     },
     pingTimeout: 60000,
+    pingInterval: 25000,
+    connectTimeout: 45000,
+    transports: ['websocket', 'polling'], // Try WebSocket first, fallback to polling
+    allowUpgrades: true,
+    upgradeTimeout: 30000,
+    maxHttpBufferSize: 1e8,
+    path: '/socket.io/',
   });
 
   // Socket.IO authentication middleware
