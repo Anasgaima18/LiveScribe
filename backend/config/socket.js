@@ -37,22 +37,31 @@ export const initSocket = (server) => {
     try {
       const token = socket.handshake.auth.token;
       
+      logger.info(`Socket auth attempt from: ${socket.handshake.address}`);
+      logger.info(`Token present: ${!!token}`);
+      
       if (!token) {
-        return next(new Error('Authentication error'));
+        logger.warn('Socket connection rejected: No token provided');
+        return next(new Error('Authentication error: No token provided'));
       }
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      logger.info(`Token decoded successfully for user ID: ${decoded.id}`);
+      
       const user = await User.findById(decoded.id).select('-passwordHash');
 
       if (!user) {
+        logger.warn(`Socket connection rejected: User not found (ID: ${decoded.id})`);
         return next(new Error('User not found'));
       }
 
+      logger.info(`Socket authenticated successfully for user: ${user.name} (${user._id})`);
       socket.user = user;
       next();
     } catch (error) {
-      logger.error('Socket authentication error:', error);
-      next(new Error('Authentication error'));
+      logger.error('Socket authentication error:', error.message);
+      logger.error('Error stack:', error.stack);
+      next(new Error(`Authentication error: ${error.message}`));
     }
   });
 
@@ -339,8 +348,10 @@ export const initSocket = (server) => {
     });
 
     // Handle disconnection
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
       logger.info(`User disconnected: ${socket.user.name} (${userId})`);
+      logger.info(`Disconnect reason: ${reason}`);
+      
       activeUsers.delete(userId);
       
       socket.broadcast.emit('user:offline', {

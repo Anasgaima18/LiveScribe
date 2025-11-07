@@ -58,6 +58,13 @@ export const SocketProvider = ({ children }) => {
       });
       socketInstance.on('connect_error', (err) => {
         console.warn('[SOCKET] Connect error:', err?.message || err);
+        console.warn('[SOCKET] Connect error details:', err);
+        
+        // If authentication fails, log more details
+        if (err?.message?.includes('Authentication') || err?.message?.includes('token')) {
+          console.error('[SOCKET] Authentication failed! Token may be invalid or expired.');
+          console.log('[SOCKET] Current token (first 20 chars):', user.token?.substring(0, 20));
+        }
       });
 
       return () => {
