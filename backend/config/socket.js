@@ -202,25 +202,37 @@ export const initSocket = (server) => {
     // 'transcript:new' events to the room. This is a skeleton; fill Sarvam client.
     let sarvamSession = null;
     socket.on('transcription:start', async ({ roomId, language = 'en' }) => {
+      // Wrap EVERYTHING in try-catch to prevent socket disconnection
       try {
+        logger.info(`=== TRANSCRIPTION START ===`);
+        logger.info(`Room: ${roomId}, Language: ${language}, User: ${socket.user.name}`);
+        
         const provider = process.env.TRANSCRIPTION_PROVIDER;
         const apiKey = process.env.SARVAM_API_KEY;
         
-        logger.info(`Transcription start requested for room ${roomId}`);
-        logger.info(`Provider: "${provider}", Language: "${language}"`);
-        logger.info(`API Key configured: ${apiKey ? 'YES (length: ' + apiKey.length + ')' : 'NO'}`);
+        logger.info(`Provider: "${provider}"`);
+        logger.info(`API Key present: ${!!apiKey} ${apiKey ? `(length: ${apiKey.length})` : ''}`);
         
         if (provider !== 'sarvam') {
-          logger.warn(`Transcription provider not configured. Current: "${provider}", Expected: "sarvam"`);
-          socket.emit('transcript:status', { status: 'disabled', reason: 'provider_not_configured' });
+          logger.warn(`Transcription provider not sarvam: "${provider}"`);
+          try {
+            socket.emit('transcript:status', { status: 'disabled', reason: 'provider_not_configured' });
+          } catch (emitErr) {
+            logger.error('Failed to emit disabled status:', emitErr);
+          }
           return;
         }
         
         if (!apiKey) {
-          logger.error('SARVAM_API_KEY environment variable not set!');
-          socket.emit('transcript:status', { status: 'error', reason: 'api_key_missing' });
+          logger.error('SARVAM_API_KEY not configured!');
+          try {
+            socket.emit('transcript:status', { status: 'error', reason: 'api_key_missing' });
+          } catch (emitErr) {
+            logger.error('Failed to emit error status:', emitErr);
+          }
           return;
         }
+        
         
         const { createSarvamClient } = await import('../utils/transcription/sarvamClient.js');
         // Map language codes: 'en' -> 'en-IN', 'hi' -> 'hi-IN', etc.
@@ -228,9 +240,14 @@ export const initSocket = (server) => {
         
         logger.info(`Creating Sarvam client with language: ${languageCode}`);
         sarvamSession = createSarvamClient({ language: languageCode });
+        logger.info(`Sarvam client created successfully`);
         
         sarvamSession.on('partial', (data) => {
           try {
+            if (!data || typeof data.text !== 'string') {
+              logger.warn('Invalid partial transcript data received');
+              return;
+            }
             io.to(`call:${roomId}`).emit('transcript:new', {
               userId,
               userName: socket.user.name,
@@ -239,10 +256,13 @@ export const initSocket = (server) => {
           } catch (err) {
             logger.error('Error emitting partial transcript:', err);
           }
-        });
-        
+        });        
         sarvamSession.on('final', async (data) => {
           try {
+            if (!data || typeof data.text !== 'string') {
+              logger.warn('Invalid final transcript data received');
+              return;
+            }
             const segment = { text: data.text, timestamp: data.timestamp, isPartial: false };
             
             // Broadcast to room participants
@@ -250,9 +270,7 @@ export const initSocket = (server) => {
               userId,
               userName: socket.user.name,
               segment,
-            });
-
-            // Persist final transcript to database
+            });            // Persist final transcript to database
             try {
               // Find the call to get callId
               const Call = (await import('../models/Call.js')).default;
@@ -300,11 +318,28 @@ export const initSocket = (server) => {
         });
         
         // Start the session
+        logger.info(`Calling sarvamSession.connect()...`);
         sarvamSession.connect();
-        logger.info(`Sarvam client created and connecting for language: ${languageCode}`);
+        logger.info(`Sarvam session connected, emitting status...`);
+        
+        // Emit success status (don't wait for 'open' event, do it immediately)
+        try {
+          socket.emit('transcript:status', { status: 'active', provider: 'sarvam' });
+          logger.info(`Successfully emitted active status`);
+        } catch (emitErr) {
+          logger.error('Failed to emit active status (immediate):', emitErr);
+        }
+        
+        logger.info(`=== TRANSCRIPTION START COMPLETE ===`);
       } catch (e) {
-        logger.error('Failed to start transcription:', e);
-        socket.emit('transcript:status', { status: 'error', reason: e.message });
+        logger.error('=== TRANSCRIPTION START FAILED ===');
+        logger.error('Error:', e);
+        logger.error('Stack:', e.stack);
+        try {
+          socket.emit('transcript:status', { status: 'error', reason: e.message });
+        } catch (emitErr) {
+          logger.error('Failed to emit error status:', emitErr);
+        }
       }
     });
 
