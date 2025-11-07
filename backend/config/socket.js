@@ -343,12 +343,17 @@ export const initSocket = (server) => {
       }
     });
 
-    socket.on('transcription:audio', async ({ chunk }) => {
+    socket.on('transcription:audio', ({ chunk }) => {
       try {
         if (sarvamSession && chunk) {
           // Expect chunk as base64-encoded PCM16 mono 16kHz
           const buf = Buffer.from(chunk, 'base64');
-          await sarvamSession.sendAudio(buf);
+          const maybePromise = sarvamSession.sendAudio(buf);
+          if (maybePromise && typeof maybePromise.catch === 'function') {
+            maybePromise.catch((err) => {
+              logger.error('sarvamSession.sendAudio failed:', err);
+            });
+          }
         } else if (!sarvamSession) {
           logger.warn('Received audio chunk but sarvamSession is not initialized');
         }
