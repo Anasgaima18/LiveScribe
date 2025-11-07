@@ -61,8 +61,7 @@ export const initSocket = (server) => {
     } catch (error) {
       logger.error('Socket authentication error:', error.message);
       logger.error('Error stack:', error.stack);
-      next(new Error(`Authentication error: ${error.message}`));
-    }
+      next(new Error('Authentication failed'));    }
   });
 
   io.on('connection', (socket) => {
