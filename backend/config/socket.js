@@ -349,12 +349,17 @@ export const initSocket = (server) => {
       }
     });
 
-    socket.on('transcription:audio', ({ chunk }) => {
+    socket.on('transcription:audio', ({ chunk, meta }) => {
       try {
         if (sarvamSession && chunk) {
+          // Log metadata if present (first 10 chunks for debugging)
+          if (meta && sarvamSession._chunkCount < 10) {
+            logger.info(`Chunk meta: RMS_Int16=${meta.rmsInt16?.toFixed(0)}, Duration=${meta.durationMs?.toFixed(1)}ms, Samples=${meta.samples}`);
+          }
+          
           // Expect chunk as base64-encoded PCM16 mono 16kHz
           const buf = Buffer.from(chunk, 'base64');
-          const maybePromise = sarvamSession.sendAudio(buf);
+          const maybePromise = sarvamSession.sendAudio(buf, meta);
           if (maybePromise && typeof maybePromise.catch === 'function') {
             maybePromise.catch((err) => {
               logger.error('sarvamSession.sendAudio failed:', err);

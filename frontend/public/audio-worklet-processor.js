@@ -1,15 +1,18 @@
 /**
  * AudioWorklet Processor for real-time audio capture
- * Replaces deprecated ScriptProcessorNode
+ * Implements consistent chunking with CHUNK_SAMPLES = 3200 (~200ms @ 16kHz)
  */
 const TARGET_SAMPLE_RATE = 16000;
+const CHUNK_SAMPLES = 3200; // ~200ms @ 16kHz
 
 class AudioCaptureProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.isCapturing = true;
     this.inputSampleRate = sampleRate; // Provided by AudioWorklet global scope
-    this._frame = 0;
+    this._buffer = new Float32Array(CHUNK_SAMPLES * 2); // Double buffer for safety
+    this._bufferIndex = 0;
+    this._diagCounter = 0;
   }
 
   /**
@@ -43,6 +46,22 @@ class AudioCaptureProcessor extends AudioWorkletProcessor {
     return downsampled;
   }
 
+  /**
+   * Compute RMS and peak from Float32 buffer
+   */
+  _computeMetrics(buffer, length) {
+    let sumSq = 0;
+    let peak = 0;
+    for (let i = 0; i < length; i++) {
+      const v = buffer[i];
+      sumSq += v * v;
+      const av = Math.abs(v);
+      if (av > peak) peak = av;
+    }
+    const rmsFloat = Math.sqrt(sumSq / length);
+    return { rmsFloat, peak };
+  }
+
   process(inputs) {
     const input = inputs[0];
 
@@ -52,34 +71,40 @@ class AudioCaptureProcessor extends AudioWorkletProcessor {
 
     const inputData = input[0];
 
-    // Downsample to 16kHz if needed for Sarvam API
+    // Downsample to 16kHz if needed
     const downsampled = this._downsample(inputData, this.inputSampleRate, TARGET_SAMPLE_RATE);
 
-    // Compute diagnostics (RMS/peak) occasionally to avoid main thread spam
-    if ((this._frame++ % 10) === 0 && downsampled && downsampled.length) {
-      let sumSq = 0;
-      let peak = 0;
-      for (let i = 0; i < downsampled.length; i++) {
-        const v = downsampled[i];
-        sumSq += v * v;
-        const av = Math.abs(v);
-        if (av > peak) peak = av;
-      }
-      const rms = Math.sqrt(sumSq / downsampled.length);
-      this.port.postMessage({ type: 'diag', rms, peak, sr: this.inputSampleRate });
-    }
-
-    // Convert Float32 samples [-1,1] to Int16 PCM
-    const pcm16 = new Int16Array(downsampled.length);
+    // Accumulate into buffer
     for (let i = 0; i < downsampled.length; i++) {
-      const s = Math.max(-1, Math.min(1, downsampled[i]));
-      pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-    }
+      this._buffer[this._bufferIndex++] = downsampled[i];
 
-    this.port.postMessage(
-      { type: 'audiodata', data: pcm16.buffer },
-      [pcm16.buffer]
-    );
+      // Flush when we reach CHUNK_SAMPLES
+      if (this._bufferIndex >= CHUNK_SAMPLES) {
+        // Compute metrics for Float32 buffer
+        const { rmsFloat, peak } = this._computeMetrics(this._buffer, CHUNK_SAMPLES);
+
+        // Convert to Int16 PCM (little-endian)
+        const pcm16 = new Int16Array(CHUNK_SAMPLES);
+        for (let j = 0; j < CHUNK_SAMPLES; j++) {
+          const s = Math.max(-1, Math.min(1, this._buffer[j]));
+          pcm16[j] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+
+        // Send audio data
+        this.port.postMessage(
+          { type: 'audiodata', data: pcm16.buffer, rmsFloat, peak, samples: CHUNK_SAMPLES, sr: TARGET_SAMPLE_RATE },
+          [pcm16.buffer]
+        );
+
+        // Send diagnostics every 10 chunks
+        if ((this._diagCounter++ % 10) === 0) {
+          this.port.postMessage({ type: 'diag', rmsFloat, peak, sr: this.inputSampleRate });
+        }
+
+        // Reset buffer
+        this._bufferIndex = 0;
+      }
+    }
 
     return true; // Keep processor alive
   }

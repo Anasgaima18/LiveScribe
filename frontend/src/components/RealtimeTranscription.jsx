@@ -104,9 +104,9 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
   socket.emit('transcription:start', { roomId, language });
         
         // Start audio capture and stream chunks to backend
-        await startCapture((base64Chunk) => {
+        await startCapture((base64Chunk, meta) => {
           if (base64Chunk && base64Chunk.length > 0) {
-            socket.emit('transcription:audio', { chunk: base64Chunk });
+            socket.emit('transcription:audio', { chunk: base64Chunk, meta });
           }
         });
         

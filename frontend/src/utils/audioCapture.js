@@ -13,9 +13,12 @@ export class AudioCapture {
     this.mediaStream = null;
     this.sourceNode = null;
     this.processorNode = null;
+    this.gainNode = null; // For ScriptProcessor feedback prevention
     this.isCapturing = false;
     this.onDataCallback = null;
     this.onErrorCallback = null;
+    this.debugBoost = (import.meta.env.VITE_AUDIO_DEBUG_BOOST === 'true'); // Optional boost flag
+    this.debugCapture = (import.meta.env.VITE_DEBUG_AUDIO_CAPTURE === 'true');
   }
   // Downsample a Float32Array from sourceSampleRate to 16000 Hz
   downsampleTo16k(inputFloat32, sourceSampleRate) {
@@ -89,12 +92,43 @@ export class AudioCapture {
           if (!this.isCapturing) return;
           if (event.data.type === 'audiodata') {
             const pcm16 = new Int16Array(event.data.data);
-            const base64 = this._arrayBufferToBase64(pcm16.buffer);
-            this.onDataCallback(base64);
+            
+            // Compute rmsInt16 from PCM16 data
+            let sumSq = 0;
+            for (let i = 0; i < pcm16.length; i++) {
+              const v = pcm16[i];
+              sumSq += v * v;
+            }
+            const rmsInt16 = Math.sqrt(sumSq / pcm16.length);
+            
+            // Compute durationMs
+            const { samples, sr, rmsFloat, peak } = event.data;
+            const durationMs = (samples / sr) * 1000;
+            
+            // Optional debug boost (only if RMS is very low and flag is enabled)
+            let boostedPcm16 = pcm16;
+            if (this.debugBoost && rmsInt16 < 100) {
+              const boostFactor = 1.5;
+              boostedPcm16 = new Int16Array(pcm16.length);
+              for (let i = 0; i < pcm16.length; i++) {
+                const boosted = Math.max(-32768, Math.min(32767, pcm16[i] * boostFactor));
+                boostedPcm16[i] = boosted;
+              }
+            }
+            
+            const base64 = this._arrayBufferToBase64(boostedPcm16.buffer);
+            
+            // Log debug info
+            if (this.debugCapture) {
+              console.log(`[AudioCapture] SR=${sr}, RMS_Int16=${rmsInt16.toFixed(0)}, Duration=${durationMs.toFixed(1)}ms, Samples=${samples}`);
+            }
+            
+            // Send data with metadata
+            this.onDataCallback(base64, { rmsFloat, rmsInt16, samples, sr, durationMs });
           } else if (event.data.type === 'diag') {
-            const { rms, peak, sr } = event.data;
-            if (rms < 0.01) {
-              console.warn(`(Worklet) Audio RMS very low (${rms.toFixed(5)}), peak=${peak.toFixed(5)}, input SR=${sr}`);
+            const { rmsFloat, peak, sr } = event.data;
+            if (rmsFloat < 0.01 && this.debugCapture) {
+              console.warn(`(Worklet) Audio RMS very low (${rmsFloat.toFixed(5)}), peak=${peak.toFixed(5)}, input SR=${sr}`);
             }
           }
         };
@@ -105,6 +139,10 @@ export class AudioCapture {
         console.warn('AudioWorklet not supported, using ScriptProcessorNode');
         const bufferSize = 4096;
         this.processorNode = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+        
+        // Create silent GainNode to prevent feedback
+        this.gainNode = this.audioContext.createGain();
+        this.gainNode.gain.value = 0;
 
         this.processorNode.onaudioprocess = (e) => {
           if (!this.isCapturing) return;
@@ -119,10 +157,11 @@ export class AudioCapture {
             sumSq += v * v;
             if (Math.abs(v) > peak) peak = Math.abs(v);
           }
-          const rms = Math.sqrt(sumSq / inputDataRaw.length);
+          const rmsFloat = Math.sqrt(sumSq / inputDataRaw.length);
+          
           // Log very low RMS values to help debug capture issues
-          if (rms < 0.01) {
-            console.warn(`Audio RMS very low (${rms.toFixed(5)}), peak=${peak.toFixed(5)} - check mic, AGC/EC or capture source`);
+          if (rmsFloat < 0.01 && this.debugCapture) {
+            console.warn(`Audio RMS very low (${rmsFloat.toFixed(5)}), peak=${peak.toFixed(5)} - check mic, AGC/EC or capture source`);
           }
 
           const inputData = this.downsampleTo16k(inputDataRaw, this.audioContext.sampleRate);
@@ -133,10 +172,37 @@ export class AudioCapture {
             const s = Math.max(-1, Math.min(1, inputData[i]));
             pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
           }
+          
+          // Compute rmsInt16
+          let sumSqInt = 0;
+          for (let i = 0; i < pcm16.length; i++) {
+            const v = pcm16[i];
+            sumSqInt += v * v;
+          }
+          const rmsInt16 = Math.sqrt(sumSqInt / pcm16.length);
+          
+          const samples = pcm16.length;
+          const sr = 16000; // After downsampling
+          const durationMs = (samples / sr) * 1000;
+          
+          // Optional debug boost
+          let boostedPcm16 = pcm16;
+          if (this.debugBoost && rmsInt16 < 100) {
+            const boostFactor = 1.5;
+            boostedPcm16 = new Int16Array(pcm16.length);
+            for (let i = 0; i < pcm16.length; i++) {
+              const boosted = Math.max(-32768, Math.min(32767, pcm16[i] * boostFactor));
+              boostedPcm16[i] = boosted;
+            }
+          }
+          
+          if (this.debugCapture) {
+            console.log(`[AudioCapture] SR=${sr}, RMS_Int16=${rmsInt16.toFixed(0)}, Duration=${durationMs.toFixed(1)}ms, Samples=${samples}`);
+          }
 
           // Convert to base64
-          const base64 = this._arrayBufferToBase64(pcm16.buffer);
-          this.onDataCallback(base64);
+          const base64 = this._arrayBufferToBase64(boostedPcm16.buffer);
+          this.onDataCallback(base64, { rmsFloat, rmsInt16, samples, sr, durationMs });
         };
         
         console.log('Audio capture started: 16kHz mono PCM16 (ScriptProcessorNode)');
@@ -156,11 +222,11 @@ export class AudioCapture {
 
       this.sourceNode.connect(this.processorNode);
       
-      // Only connect to destination if it's ScriptProcessorNode (not AudioWorkletNode)
-      // AudioWorkletNode with 0 outputs doesn't need connection to destination
+      // Connect through silent GainNode for ScriptProcessorNode to prevent feedback
       if (this.processorNode.onaudioprocess) {
-        // ScriptProcessorNode - needs connection to destination
-        this.processorNode.connect(this.audioContext.destination);
+        // ScriptProcessorNode - connect through silent gain
+        this.processorNode.connect(this.gainNode);
+        this.gainNode.connect(this.audioContext.destination);
       }
 
       this.isCapturing = true;
@@ -178,6 +244,11 @@ export class AudioCapture {
    */
   stop() {
     this.isCapturing = false;
+
+    if (this.gainNode) {
+      this.gainNode.disconnect();
+      this.gainNode = null;
+    }
 
     if (this.processorNode) {
       this.processorNode.disconnect();
