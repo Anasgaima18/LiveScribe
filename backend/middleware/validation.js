@@ -62,7 +62,14 @@ export const createCallSchema = Joi.object({
       'any.required': 'Room ID is required'
     }),
   participants: Joi.array()
-    .items(Joi.string())
+    .items(
+      Joi.alternatives().try(
+        Joi.string(),
+        Joi.object({
+          userId: Joi.string().required()
+        })
+      )
+    )
     .optional()
 });
 
