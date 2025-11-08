@@ -207,14 +207,17 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.duplicateWindowMs = options.duplicateWindowMs || 3000; // suppress duplicates within 3s
     this.genericFillers = options.genericFillers || ['yes', 'yeah', 'ya', 'ok', 'okay', 'hmm', 'uh', 'um'];
     this.hadSpeech = false;
-    this.minFlushBytes = options.minFlushBytes || 32000;
+    this.minFlushBytes = options.minFlushBytes || 51200; // Increased to ~3.2s @ 16kHz to avoid short transcripts
     
-    // Batching configuration
-    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 400; // min 400ms batch
+    // Batching configuration - increased to 800ms to reduce filler transcripts
+    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 800; // min 800ms batch
     this.batchStartTime = null;
     this.totalDurationMs = 0;
     this._chunkCount = 0;
     this._droppedChunks = 0;
+    
+    // Minimum word count to accept transcript (reject short filler responses)
+    this.minWordCount = parseInt(process.env.MIN_WORD_COUNT) || 3; // require at least 3 words
     
     this.debugCapture = (process.env.DEBUG_AUDIO_CAPTURE === 'true');
   }
@@ -398,11 +401,13 @@ export class SarvamRealtimeClient extends EventEmitter {
         });
         // Normalize result fields for downstream usage
         result.language = result.detectedLanguage || 'unknown';
+        logger.debug(`Auto-detected language: ${result.language}`);
       } else {
         result = await this.sttClient.transcribe(wavBuffer, {
           language: this.language,
           withTimestamps: false,
         });
+        logger.debug(`Using configured language: ${this.language}`);
       }
 
       logger.info(`Transcription result: "${result.transcript}" (language: ${result.language})`);
@@ -412,12 +417,24 @@ export class SarvamRealtimeClient extends EventEmitter {
         logger.warn('Empty transcript received from Sarvam API');
         return;
       }
+      
+      // QUALITY CHECK: If language is unknown and transcript is short, likely hallucination
+      if (result.language === 'unknown' && text.length < 20) {
+        logger.warn(`Rejected low-quality transcript: "${text}" (language unknown, too short)`);
+        return;
+      }
 
-      // Enhanced duplicate / filler suppression
+      // Enhanced duplicate / filler suppression with minimum word count filter
       const now = Date.now();
       const lower = text.toLowerCase();
       const words = lower.split(/\s+/).filter(w => w.length > 0);
       const wordCount = words.length;
+      
+      // REJECT any transcript with fewer than minWordCount words (unless it's a long single word)
+      if (wordCount < this.minWordCount && text.length < 15) {
+        logger.info(`Rejected short transcript: "${text}" (${wordCount} words, ${text.length} chars) - below minimum word count ${this.minWordCount}`);
+        return;
+      }
       
       // Check if it's a 1-2 word generic filler
       const isFillWords = wordCount <= 2 && words.every(w => this.genericFillers.includes(w.replace(/[.!?,]/g, '')));
