@@ -86,10 +86,16 @@ export class AudioCapture {
         });
 
         this.processorNode.port.onmessage = (event) => {
-          if (event.data.type === 'audiodata' && this.isCapturing) {
+          if (!this.isCapturing) return;
+          if (event.data.type === 'audiodata') {
             const pcm16 = new Int16Array(event.data.data);
             const base64 = this._arrayBufferToBase64(pcm16.buffer);
             this.onDataCallback(base64);
+          } else if (event.data.type === 'diag') {
+            const { rms, peak, sr } = event.data;
+            if (rms < 0.01) {
+              console.warn(`(Worklet) Audio RMS very low (${rms.toFixed(5)}), peak=${peak.toFixed(5)}, input SR=${sr}`);
+            }
           }
         };
         

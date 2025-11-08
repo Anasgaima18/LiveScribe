@@ -16,6 +16,8 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
   const autoStart = (import.meta.env.VITE_TRANSCRIPTION_AUTOSTART === 'true');
   const [providerStatus, setProviderStatus] = useState('idle'); // idle | active | disabled | error
   const [providerName, setProviderName] = useState('');
+  const [language, setLanguage] = useState('auto'); // 'auto' | 'en' | 'hi' | 'kn' | 'te' | 'ta' | 'gu' ...
+  const [detectedLanguage, setDetectedLanguage] = useState('');
 
   useEffect(() => {
     if (!socket || !enabled) return;
@@ -23,6 +25,9 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
     // Listen for realtime transcript updates
     const handleTranscript = ({ userId, userName, segment }) => {
       console.log('Received transcript:', { userId, userName, segment });
+      if (segment && segment.language) {
+        setDetectedLanguage(segment.language);
+      }
       setTranscripts((prev) => {
         // If partial, replace last partial with new partial
         // If final, append as new entry
@@ -95,8 +100,8 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
         setProviderName('browser');
       } else {
         // Server-side (Sarvam) mode
-        console.log('Starting Sarvam transcription for room:', roomId);
-        socket.emit('transcription:start', { roomId, language: 'en' });
+  console.log('Starting Sarvam transcription for room:', roomId, 'lang:', language);
+  socket.emit('transcription:start', { roomId, language });
         
         // Start audio capture and stream chunks to backend
         await startCapture((base64Chunk) => {
@@ -160,7 +165,21 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
     <div className="realtime-transcription">
       <div className="rt-header">
         <h4>Realtime Transcription</h4>
-        <div className="rt-status">{`Mode: ${providerName || mode} | Status: ${providerStatus}`}</div>
+        <div className="rt-status">{`Mode: ${providerName || mode} | Status: ${providerStatus}${detectedLanguage ? ` | Lang: ${detectedLanguage}` : ''}`}</div>
+        <div className="rt-controls" style={{ gap: '8px', display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+          <label style={{ fontSize: '13px' }}>
+            Language:
+            <select value={language} onChange={(e) => setLanguage(e.target.value)} style={{ marginLeft: '6px' }}>
+              <option value="auto">Auto (detect + English)</option>
+              <option value="en">English</option>
+              <option value="hi">Hindi</option>
+              <option value="kn">Kannada</option>
+              <option value="te">Telugu</option>
+              <option value="ta">Tamil</option>
+              <option value="gu">Gujarati</option>
+            </select>
+          </label>
+        </div>
         {!enabled && (
           <div className="rt-warning" style={{ color: '#ff9500', fontSize: '13px', marginTop: '4px' }}>
             ⚠️ Consent required - Reload page to accept recording consent

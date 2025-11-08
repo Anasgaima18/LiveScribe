@@ -263,7 +263,13 @@ export const initSocket = (server) => {
               logger.warn('Invalid final transcript data received');
               return;
             }
-            const segment = { text: data.text, timestamp: data.timestamp, isPartial: false };
+            const segment = { 
+              text: data.text, 
+              timestamp: data.timestamp, 
+              isPartial: false,
+              language: data.language,
+              autoDetected: !!data.autoDetected
+            };
             
             // Broadcast to room participants
             io.to(`call:${roomId}`).emit('transcript:new', {

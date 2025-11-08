@@ -9,6 +9,7 @@ class AudioCaptureProcessor extends AudioWorkletProcessor {
     super();
     this.isCapturing = true;
     this.inputSampleRate = sampleRate; // Provided by AudioWorklet global scope
+    this._frame = 0;
   }
 
   /**
@@ -53,6 +54,20 @@ class AudioCaptureProcessor extends AudioWorkletProcessor {
 
     // Downsample to 16kHz if needed for Sarvam API
     const downsampled = this._downsample(inputData, this.inputSampleRate, TARGET_SAMPLE_RATE);
+
+    // Compute diagnostics (RMS/peak) occasionally to avoid main thread spam
+    if ((this._frame++ % 10) === 0 && downsampled && downsampled.length) {
+      let sumSq = 0;
+      let peak = 0;
+      for (let i = 0; i < downsampled.length; i++) {
+        const v = downsampled[i];
+        sumSq += v * v;
+        const av = Math.abs(v);
+        if (av > peak) peak = av;
+      }
+      const rms = Math.sqrt(sumSq / downsampled.length);
+      this.port.postMessage({ type: 'diag', rms, peak, sr: this.inputSampleRate });
+    }
 
     // Convert Float32 samples [-1,1] to Int16 PCM
     const pcm16 = new Int16Array(downsampled.length);
