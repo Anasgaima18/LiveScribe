@@ -201,7 +201,7 @@ export const initSocket = (server) => {
     // Client can send raw PCM chunks; backend forwards to Sarvam and emits
     // 'transcript:new' events to the room. This is a skeleton; fill Sarvam client.
     let sarvamSession = null;
-    socket.on('transcription:start', async ({ roomId, language = 'en' }) => {
+  socket.on('transcription:start', async ({ roomId, language = 'en' }) => {
       // Wrap EVERYTHING in try-catch to prevent socket disconnection
       try {
         logger.info(`=== TRANSCRIPTION START ===`);
@@ -234,12 +234,12 @@ export const initSocket = (server) => {
         }
         
         
-        const { createSarvamClient } = await import('../utils/transcription/sarvamClient.js');
-        // Map language codes: 'en' -> 'en-IN', 'hi' -> 'hi-IN', etc.
-        const languageCode = language === 'en' ? 'en-IN' : language === 'hi' ? 'hi-IN' : `${language}-IN`;
+  const { createSarvamClient } = await import('../utils/transcription/sarvamClient.js');
+  // Map language codes: 'en' -> 'en-IN', 'hi' -> 'hi-IN', etc. Support 'auto' for detection+translate
+  const languageCode = language === 'auto' ? 'auto' : (language === 'en' ? 'en-IN' : language === 'hi' ? 'hi-IN' : `${language}-IN`);
         
         logger.info(`Creating Sarvam client with language: ${languageCode}`);
-        sarvamSession = createSarvamClient({ language: languageCode });
+  sarvamSession = createSarvamClient({ language: languageCode });
         logger.info(`Sarvam client created successfully`);
         
         sarvamSession.on('partial', (data) => {

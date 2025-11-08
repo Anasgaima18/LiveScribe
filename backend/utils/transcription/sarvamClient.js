@@ -198,6 +198,14 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.currentSize = 0;
     this.language = options.language || 'en-IN'; // Default to English
     this.isActive = false;
+    // Basic VAD / filtering configuration
+    this.minRms = options.minRms || 120; // Int16 RMS below this treated as silence
+    this.maxSilenceChunks = options.maxSilenceChunks || 12; // consecutive silent chunks before hard flush/reset
+    this.silenceCount = 0;
+    this.lastTranscript = '';
+    this.lastTranscriptTime = 0;
+    this.duplicateWindowMs = options.duplicateWindowMs || 4000; // suppress duplicates within 4s
+    this.genericFillers = options.genericFillers || ['yes', 'yeah', 'ya', 'ok', 'okay', 'hmm'];
   }
 
   start() {
@@ -235,10 +243,19 @@ export class SarvamRealtimeClient extends EventEmitter {
     const peakDb = 20 * Math.log10(peak / 32768);
     
     logger.debug(`Audio chunk: ${pcm16Buffer.length} bytes, RMS: ${rms.toFixed(0)} (${rmsDb.toFixed(1)} dB), Peak: ${peak} (${peakDb.toFixed(1)} dB)`);
-    
-    // Warn if audio is too quiet (likely silence)
-    if (rms < 100) {
-      logger.warn(`Audio RMS very low (${rms.toFixed(0)}), may be silence or very quiet input`);
+
+    const isSilent = rms < this.minRms;
+    if (isSilent) {
+      this.silenceCount++;
+      if (this.silenceCount % 5 === 0) { // avoid log spam
+        logger.warn(`Silence chunk detected (RMS=${rms.toFixed(0)} < minRms=${this.minRms}). Consecutive silence: ${this.silenceCount}`);
+      }
+    } else {
+      // reset silence counter on speech
+      if (this.silenceCount > 0) {
+        logger.debug(`Speech detected, resetting silence counter (had ${this.silenceCount})`);
+      }
+      this.silenceCount = 0;
     }
     
     // Warn if clipping detected
@@ -246,8 +263,16 @@ export class SarvamRealtimeClient extends EventEmitter {
       logger.warn(`Audio clipping detected! Peak at max value ${peak}`);
     }
 
-    this.audioChunks.push(pcm16Buffer);
-    this.currentSize += pcm16Buffer.length;
+    // Only accumulate non-silent audio OR a limited amount of silence that immediately follows speech
+    if (!isSilent || this.silenceCount < 3) {
+      this.audioChunks.push(pcm16Buffer);
+      this.currentSize += pcm16Buffer.length;
+    } else if (this.silenceCount >= this.maxSilenceChunks && this.currentSize > 0) {
+      // Long silence: flush what we have to avoid holding stale buffer
+      logger.info(`Long silence (${this.silenceCount} chunks) triggering flush of ${this.currentSize} bytes`);
+      await this._processChunks();
+      return; // stop further threshold processing this call
+    }
 
     // Reduced threshold for faster response: chunkSize * 2 = ~5 seconds
     // Previously was chunkSize * 4 = ~10 seconds which was too slow
@@ -255,7 +280,15 @@ export class SarvamRealtimeClient extends EventEmitter {
     logger.debug(`Audio accumulated: ${this.currentSize}/${threshold} bytes`);
     
     if (this.currentSize >= threshold) {
-      logger.info(`Processing ${this.currentSize} bytes of audio`);
+      logger.info(`Processing ${this.currentSize} bytes of audio (threshold reached)`);
+      await this._processChunks();
+      return;
+    }
+
+    // Safety flush: if accumulated speech+silence grows too large
+    const maxBytes = this.chunkSize * 4; // ~ previous upper bound
+    if (this.currentSize >= maxBytes) {
+      logger.info(`Safety flush at ${this.currentSize} bytes (maxBytes=${maxBytes})`);
       await this._processChunks();
     }
   }
@@ -274,22 +307,63 @@ export class SarvamRealtimeClient extends EventEmitter {
       const wavBuffer = this._pcm16ToWav(audioBuffer, 16000, 1);
       logger.debug(`Converted to WAV: ${wavBuffer.length} bytes`);
 
-      const result = await this.sttClient.transcribe(wavBuffer, {
-        language: this.language,
-        withTimestamps: false,
-      });
+      // Optional debug dump of WAV for inspection
+      if (process.env.SARVAM_DEBUG_DUMP_WAV === 'true') {
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          const dir = path.resolve(process.cwd(), 'logs', 'wav-dumps');
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+          const file = path.join(dir, `${Date.now()}_${Math.random().toString(36).slice(2)}.wav`);
+          fs.writeFileSync(file, wavBuffer);
+          logger.info(`WAV dump saved: ${file}`);
+        } catch (e) {
+          logger.warn('Failed to dump WAV file:', e.message);
+        }
+      }
+
+      let result;
+      if (this.language === 'auto') {
+        // Auto-detect + translate to English
+        result = await this.sttClient.transcribeAndTranslate(wavBuffer, {
+          withTimestamps: false,
+        });
+        // Normalize result fields for downstream usage
+        result.language = result.detectedLanguage || 'unknown';
+      } else {
+        result = await this.sttClient.transcribe(wavBuffer, {
+          language: this.language,
+          withTimestamps: false,
+        });
+      }
 
       logger.info(`Transcription result: "${result.transcript}" (language: ${result.language})`);
 
-      if (result.transcript && result.transcript.trim()) {
-        this.emit('final', {
-          text: result.transcript,
-          timestamp: result.timestamp,
-          language: result.language,
-        });
-      } else {
+      const text = (result.transcript || '').trim();
+      if (!text) {
         logger.warn('Empty transcript received from Sarvam API');
+        return;
       }
+
+      // Duplicate / filler suppression
+      const now = Date.now();
+      const lower = text.toLowerCase();
+      const isGeneric = this.genericFillers.includes(lower.replace(/[.!]/g, '')) && text.length <= 6;
+      const duplicate = isGeneric && this.lastTranscript.toLowerCase() === lower && (now - this.lastTranscriptTime) < this.duplicateWindowMs;
+      if (duplicate) {
+        logger.info(`Suppressed duplicate filler transcript: "${text}" within ${this.duplicateWindowMs}ms window`);
+        return;
+      }
+
+      this.lastTranscript = text;
+      this.lastTranscriptTime = now;
+
+      this.emit('final', {
+        text,
+        timestamp: result.timestamp,
+        language: result.language,
+        autoDetected: this.language === 'auto'
+      });
     } catch (error) {
       logger.error('Error processing audio chunks:', error);
       this.emit('error', error);
