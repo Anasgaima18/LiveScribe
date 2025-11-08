@@ -219,6 +219,33 @@ export class SarvamRealtimeClient extends EventEmitter {
   async sendAudio(pcm16Buffer) {
     if (!this.isActive) return;
 
+    // Calculate audio metrics for diagnostics
+    const samples = new Int16Array(pcm16Buffer.buffer, pcm16Buffer.byteOffset, pcm16Buffer.length / 2);
+    let sum = 0;
+    let peak = 0;
+    
+    for (let i = 0; i < samples.length; i++) {
+      const abs = Math.abs(samples[i]);
+      sum += abs * abs;
+      if (abs > peak) peak = abs;
+    }
+    
+    const rms = Math.sqrt(sum / samples.length);
+    const rmsDb = 20 * Math.log10(rms / 32768);
+    const peakDb = 20 * Math.log10(peak / 32768);
+    
+    logger.debug(`Audio chunk: ${pcm16Buffer.length} bytes, RMS: ${rms.toFixed(0)} (${rmsDb.toFixed(1)} dB), Peak: ${peak} (${peakDb.toFixed(1)} dB)`);
+    
+    // Warn if audio is too quiet (likely silence)
+    if (rms < 100) {
+      logger.warn(`Audio RMS very low (${rms.toFixed(0)}), may be silence or very quiet input`);
+    }
+    
+    // Warn if clipping detected
+    if (peak >= 32767) {
+      logger.warn(`Audio clipping detected! Peak at max value ${peak}`);
+    }
+
     this.audioChunks.push(pcm16Buffer);
     this.currentSize += pcm16Buffer.length;
 

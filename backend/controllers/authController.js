@@ -1,5 +1,6 @@
 import User from '../models/User.js';
 import { generateToken } from '../middleware/auth.js';
+import logger from '../config/logger.js';
 
 // @desc    Register new user
 // @route   POST /api/auth/register
@@ -37,7 +38,7 @@ export const register = async (req, res) => {
       res.status(400).json({ message: "Invalid user data" });
     }
   } catch (error) {
-    console.error(error);
+    logger.error('Registration error:', error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
@@ -70,7 +71,7 @@ export const login = async (req, res) => {
       token: generateToken(user._id),
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Login error:', error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
@@ -83,7 +84,7 @@ export const getUsers = async (req, res) => {
     const users = await User.find({ _id: { $ne: req.user._id } }).select('-passwordHash');
     res.json(users);
   } catch (error) {
-    console.error(error);
+    logger.error('Get users error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -96,7 +97,7 @@ export const getMe = async (req, res) => {
     const user = await User.findById(req.user._id).select('-passwordHash');
     res.json(user);
   } catch (error) {
-    console.error(error);
+    logger.error('Get profile error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };

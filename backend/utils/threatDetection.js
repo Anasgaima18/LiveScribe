@@ -87,7 +87,16 @@ Severity levels:
       max_tokens: 500
     });
 
-    const aiResult = JSON.parse(response.choices[0].message.content);
+    let aiResult;
+    try {
+      aiResult = JSON.parse(response.choices[0].message.content);
+    } catch (parseError) {
+      logger.error('Failed to parse AI response as JSON:', {
+        error: parseError.message,
+        response: response.choices[0].message.content
+      });
+      return null;
+    }
     
     logger.info('AI threat analysis completed', {
       hasThreats: aiResult.hasThreats,

@@ -1,4 +1,5 @@
 import { AccessToken } from 'livekit-server-sdk';
+import logger from '../config/logger.js';
 
 // @desc    Generate LiveKit access token
 // @route   GET /api/livekit/token
@@ -55,7 +56,7 @@ export const getToken = async (req, res) => {
       ]
     });
   } catch (error) {
-    console.error('LiveKit token generation error:', error);
+    logger.error('LiveKit token generation error:', error);
     res.status(500).json({ message: 'Failed to generate token', error: error.message });
   }
 };

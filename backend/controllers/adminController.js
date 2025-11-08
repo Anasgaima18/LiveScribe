@@ -180,8 +180,8 @@ export const getActiveSessions = async (req, res) => {
         userId: p.userId._id,
         name: p.userId.name,
         email: p.userId.email,
-        joinedAt: p.joinedAt,
-        status: p.leftAt ? 'left' : 'active'
+        joinedAt: p.joinAt,
+        status: p.leaveAt ? 'left' : 'active'
       }))
     }));
 

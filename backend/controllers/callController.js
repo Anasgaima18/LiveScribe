@@ -4,6 +4,7 @@ import Alert from '../models/Alert.js';
 import { detectThreats } from '../utils/threatDetection.js';
 import OpenAI from 'openai';
 import { sendToUser } from '../config/socket.js';
+import logger from '../config/logger.js';
 
 // Lazy-load OpenAI client to avoid startup crash if API key is missing
 let openai = null;
@@ -70,7 +71,7 @@ export const createCall = async (req, res) => {
 
     res.status(201).json(call);
   } catch (error) {
-    console.error(error);
+    logger.error('Create call error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -102,7 +103,7 @@ export const endCall = async (req, res) => {
 
     res.json(call);
   } catch (error) {
-    console.error(error);
+    logger.error('End call error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -163,7 +164,7 @@ export const saveTranscript = async (req, res) => {
 
     res.status(201).json(transcript);
   } catch (error) {
-    console.error(error);
+    logger.error('Save transcript error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -179,7 +180,7 @@ export const getTranscripts = async (req, res) => {
 
     res.json(transcripts);
   } catch (error) {
-    console.error(error);
+    logger.error('Get transcripts error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -269,7 +270,7 @@ export const getAlerts = async (req, res) => {
 
     res.json(alerts);
   } catch (error) {
-    console.error(error);
+    logger.error('Get alerts error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -285,7 +286,7 @@ export const getUserCalls = async (req, res) => {
 
     res.json(calls);
   } catch (error) {
-    console.error(error);
+    logger.error('Get user calls error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
