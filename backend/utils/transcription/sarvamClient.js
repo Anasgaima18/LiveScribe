@@ -206,6 +206,8 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.lastTranscriptTime = 0;
     this.duplicateWindowMs = options.duplicateWindowMs || 4000; // suppress duplicates within 4s
     this.genericFillers = options.genericFillers || ['yes', 'yeah', 'ya', 'ok', 'okay', 'hmm'];
+    this.hadSpeech = false; // track if speech occurred in current accumulation window
+    this.minFlushBytes = options.minFlushBytes || 32000; // do not send buffers smaller than ~1s audio
   }
 
   start() {
@@ -256,6 +258,7 @@ export class SarvamRealtimeClient extends EventEmitter {
         logger.debug(`Speech detected, resetting silence counter (had ${this.silenceCount})`);
       }
       this.silenceCount = 0;
+      this.hadSpeech = true;
     }
     
     // Warn if clipping detected
@@ -264,14 +267,24 @@ export class SarvamRealtimeClient extends EventEmitter {
     }
 
     // Only accumulate non-silent audio OR a limited amount of silence that immediately follows speech
-    if (!isSilent || this.silenceCount < 3) {
+    if (!isSilent) {
+      this.audioChunks.push(pcm16Buffer);
+      this.currentSize += pcm16Buffer.length;
+    } else if (this.hadSpeech && this.silenceCount < 3) {
+      // include limited trailing silence after speech to mark boundary
       this.audioChunks.push(pcm16Buffer);
       this.currentSize += pcm16Buffer.length;
     } else if (this.silenceCount >= this.maxSilenceChunks && this.currentSize > 0) {
-      // Long silence: flush what we have to avoid holding stale buffer
       logger.info(`Long silence (${this.silenceCount} chunks) triggering flush of ${this.currentSize} bytes`);
-      await this._processChunks();
-      return; // stop further threshold processing this call
+      if (this.currentSize < this.minFlushBytes) {
+        logger.debug(`Discarding tiny buffer (${this.currentSize} < ${this.minFlushBytes}) - avoid trivial STT response`);
+        this.audioChunks = [];
+        this.currentSize = 0;
+        this.hadSpeech = false;
+      } else {
+        await this._processChunks();
+      }
+      return;
     }
 
     // Reduced threshold for faster response: chunkSize * 2 = ~5 seconds
@@ -302,6 +315,23 @@ export class SarvamRealtimeClient extends EventEmitter {
       
       this.audioChunks = [];
       this.currentSize = 0;
+
+      // Aggregate RMS gating before converting
+      const samples = new Int16Array(audioBuffer.buffer, audioBuffer.byteOffset, audioBuffer.length / 2);
+      if (samples.length > 0) {
+        let sum = 0, peak = 0;
+        for (let i = 0; i < samples.length; i++) {
+          const v = Math.abs(samples[i]);
+          sum += v * v;
+          if (v > peak) peak = v;
+        }
+        const aggRms = Math.sqrt(sum / samples.length);
+        if (aggRms < this.minRms) {
+          logger.debug(`Skipping STT call: aggregate RMS ${aggRms.toFixed(0)} below ${this.minRms}`);
+          this.hadSpeech = false;
+          return;
+        }
+      }
 
       // Convert raw PCM16 to WAV format for Sarvam
       const wavBuffer = this._pcm16ToWav(audioBuffer, 16000, 1);
@@ -364,6 +394,7 @@ export class SarvamRealtimeClient extends EventEmitter {
         language: result.language,
         autoDetected: this.language === 'auto'
       });
+      this.hadSpeech = false; // reset boundary state after successful emission
     } catch (error) {
       logger.error('Error processing audio chunks:', error);
       this.emit('error', error);
