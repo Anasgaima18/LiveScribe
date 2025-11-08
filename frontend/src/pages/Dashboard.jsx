@@ -89,9 +89,9 @@ const Dashboard = () => {
     const roomId = `room-${Date.now()}`;
     
     try {
-      // Format participants correctly as array of objects with userId
-      const participantsList = selectedUsers.map(userId => ({ userId }));
-      
+      // Format participants as an array of userId strings (backend validation accepts both formats)
+      const participantsList = selectedUsers;
+
       await api.post('/calls', {
         roomId,
         participants: participantsList

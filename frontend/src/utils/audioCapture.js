@@ -53,13 +53,15 @@ export class AudioCapture {
       this.onErrorCallback = onError;
 
       // Request microphone access
+      // Disable echoCancellation / noiseSuppression / autoGainControl for raw STT capture
+      // These browser features (AGC/EC/NS) can drastically alter amplitude and hurt STT.
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
           sampleRate: 16000,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
         },
       });
 
@@ -68,7 +70,10 @@ export class AudioCapture {
         sampleRate: 16000,
       });
 
-      this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
+  this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
+
+  // Log the actual AudioContext sample rate (browsers may ignore requested sampleRate)
+  console.log('AudioContext sampleRate:', this.audioContext.sampleRate);
 
       // Try to use modern AudioWorklet, fallback to ScriptProcessorNode
       try {
@@ -99,6 +104,21 @@ export class AudioCapture {
           if (!this.isCapturing) return;
 
           const inputDataRaw = e.inputBuffer.getChannelData(0);
+
+          // Compute simple RMS and peak for diagnostics
+          let sumSq = 0;
+          let peak = 0;
+          for (let i = 0; i < inputDataRaw.length; i++) {
+            const v = inputDataRaw[i];
+            sumSq += v * v;
+            if (Math.abs(v) > peak) peak = Math.abs(v);
+          }
+          const rms = Math.sqrt(sumSq / inputDataRaw.length);
+          // Log very low RMS values to help debug capture issues
+          if (rms < 0.01) {
+            console.warn(`Audio RMS very low (${rms.toFixed(5)}), peak=${peak.toFixed(5)} - check mic, AGC/EC or capture source`);
+          }
+
           const inputData = this.downsampleTo16k(inputDataRaw, this.audioContext.sampleRate);
           
           // Convert Float32 [-1, 1] to Int16 PCM16
