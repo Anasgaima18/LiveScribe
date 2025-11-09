@@ -33,10 +33,25 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
         // If final, append as new entry
         if (segment.isPartial && prev.length > 0 && prev[prev.length - 1].isPartial) {
           const updated = [...prev];
-          updated[updated.length - 1] = { userName, text: segment.text, isPartial: true };
+          updated[updated.length - 1] = { 
+            userName, 
+            text: segment.text, 
+            isPartial: true,
+            originalText: segment.originalText,
+            translatedText: segment.translatedText,
+            dualMode: segment.dualMode
+          };
           return updated;
         }
-        return [...prev, { userName, text: segment.text, isPartial: segment.isPartial }];
+        return [...prev, { 
+          userName, 
+          text: segment.text, 
+          isPartial: segment.isPartial,
+          originalText: segment.originalText,
+          translatedText: segment.translatedText,
+          dualMode: segment.dualMode,
+          language: segment.language
+        }];
       });
     };
 
@@ -233,10 +248,23 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
           transcripts.map((t, idx) => (
             <div
               key={idx}
-              className={`rt-item ${t.isPartial ? 'partial' : 'final'}`}
+              className={`rt-item ${t.isPartial ? 'partial' : 'final'} ${t.dualMode ? 'dual-mode' : ''}`}
             >
               <span className="rt-speaker">{t.userName}:</span>
-              <span className="rt-text">{t.text}</span>
+              {t.dualMode ? (
+                <div className="rt-dual-content">
+                  <div className="rt-dual-row">
+                    <span className="rt-dual-label">Original ({t.language || 'detected'}):</span>
+                    <span className="rt-text rt-original">{t.originalText}</span>
+                  </div>
+                  <div className="rt-dual-row">
+                    <span className="rt-dual-label">English:</span>
+                    <span className="rt-text rt-translated">{t.translatedText}</span>
+                  </div>
+                </div>
+              ) : (
+                <span className="rt-text">{t.text}</span>
+              )}
             </div>
           ))
         )}

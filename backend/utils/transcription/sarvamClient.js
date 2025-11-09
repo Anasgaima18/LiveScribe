@@ -12,6 +12,16 @@ import logger from '../../config/logger.js';
 
 const SARVAM_BASE_URL = 'https://api.sarvam.ai';
 
+// Sarvam AI supported language codes
+const SUPPORTED_LANGUAGES = [
+  'auto', // Auto-detect (for translate endpoint)
+  'en-IN', 'hi-IN', 'bn-IN', 'kn-IN', 'ml-IN', 'mr-IN', 
+  'od-IN', 'pa-IN', 'ta-IN', 'te-IN', 'gu-IN'
+];
+
+// Max file size for Sarvam API (10MB limit)
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+
 /**
  * Sarvam AI HTTP Client for Speech-to-Text
  * Supports batch transcription via file upload
@@ -38,6 +48,56 @@ export class SarvamSTTClient {
   }
 
   /**
+   * Validate language code
+   */
+  _validateLanguage(languageCode) {
+    if (!SUPPORTED_LANGUAGES.includes(languageCode)) {
+      logger.warn(`Unsupported language code: ${languageCode}. Falling back to en-IN`);
+      return 'en-IN';
+    }
+    return languageCode;
+  }
+
+  /**
+   * Validate audio buffer size
+   */
+  _validateAudioSize(audioBuffer) {
+    if (audioBuffer.length > MAX_FILE_SIZE) {
+      throw new Error(`Audio buffer size (${audioBuffer.length} bytes) exceeds maximum (${MAX_FILE_SIZE} bytes / 10MB)`);
+    }
+    return true;
+  }
+
+  /**
+   * Validate WAV format
+   */
+  _validateWavFormat(audioBuffer) {
+    if (audioBuffer.length < 44) {
+      throw new Error('Invalid WAV file: too small (< 44 bytes)');
+    }
+    
+    // Check RIFF header
+    const riff = audioBuffer.toString('ascii', 0, 4);
+    if (riff !== 'RIFF') {
+      throw new Error(`Invalid WAV file: missing RIFF header (got: ${riff})`);
+    }
+    
+    // Check WAVE format
+    const wave = audioBuffer.toString('ascii', 8, 12);
+    if (wave !== 'WAVE') {
+      throw new Error(`Invalid WAV file: missing WAVE format (got: ${wave})`);
+    }
+    
+    // Check fmt chunk
+    const fmt = audioBuffer.toString('ascii', 12, 16);
+    if (fmt !== 'fmt ') {
+      logger.warn(`WAV format warning: expected 'fmt ' chunk at position 12, got: ${fmt}`);
+    }
+    
+    return true;
+  }
+
+  /**
    * Transcribe audio buffer to text
    * @param {Buffer} audioBuffer - Audio file buffer (WAV/MP3, 16kHz recommended)
    * @param {Object} options - Override language, model, timestamps
@@ -45,6 +105,17 @@ export class SarvamSTTClient {
    */
   async transcribe(audioBuffer, options = {}) {
     try {
+      // Validate audio size
+      this._validateAudioSize(audioBuffer);
+      
+      // Validate WAV format if it looks like WAV
+      if (audioBuffer.length >= 44) {
+        const header = audioBuffer.toString('ascii', 0, 4);
+        if (header === 'RIFF') {
+          this._validateWavFormat(audioBuffer);
+        }
+      }
+      
       const form = new FormData();
       
       // Create readable stream from buffer
@@ -55,7 +126,11 @@ export class SarvamSTTClient {
       });
 
       // Language code (hi-IN, en-IN, etc.) and model per Sarvam API (multipart fields)
-      const languageCode = options.language || this.language;
+      const languageCode = this._validateLanguage(options.language || this.language);
+      
+      // Log request details
+      logger.info(`Sarvam transcribe request: size=${audioBuffer.length} bytes, language=${languageCode}`);
+      
       form.append('language_code', languageCode);
       form.append('model', options.model || this.model);
       if (options.inputAudioCodec) {
@@ -69,6 +144,8 @@ export class SarvamSTTClient {
           ...form.getHeaders(),
         },
       });
+
+      logger.debug(`Sarvam transcribe response: status=${response.status}, transcript="${response.data.transcript}"`);
 
       return {
         transcript: response.data.transcript || '',
@@ -88,12 +165,26 @@ export class SarvamSTTClient {
    */
   async transcribeAndTranslate(audioBuffer, options = {}) {
     try {
+      // Validate audio size
+      this._validateAudioSize(audioBuffer);
+      
+      // Validate WAV format if it looks like WAV
+      if (audioBuffer.length >= 44) {
+        const header = audioBuffer.toString('ascii', 0, 4);
+        if (header === 'RIFF') {
+          this._validateWavFormat(audioBuffer);
+        }
+      }
+      
       const form = new FormData();
       const audioStream = Readable.from(audioBuffer);
       form.append('file', audioStream, {
         filename: 'audio.wav',
         contentType: 'audio/wav',
       });
+
+      // Log request details
+      logger.info(`Sarvam transcribe+translate request: size=${audioBuffer.length} bytes (auto-detect)`);
 
       const response = await this.client.post('/speech-to-text-translate', form, {
         headers: {
@@ -103,6 +194,8 @@ export class SarvamSTTClient {
           model: options.model || 'saaras:v2.5',
         },
       });
+
+      logger.debug(`Sarvam translate response: status=${response.status}, transcript="${response.data.transcript}", detected=${response.data.language}`);
 
       return {
         transcript: response.data.transcript || '',
@@ -174,12 +267,42 @@ export class SarvamSTTClient {
   _handleError(error, method) {
     if (error.response) {
       const status = error.response.status;
-      const message = error.response.data?.message || error.response.data?.error || error.message;
+      const errorData = error.response.data;
+      
+      // Extract error message with fallback to stringified object
+      let message;
+      if (errorData?.message) {
+        message = errorData.message;
+      } else if (errorData?.error) {
+        message = errorData.error;
+      } else if (errorData?.detail) {
+        message = errorData.detail;
+      } else if (typeof errorData === 'string') {
+        message = errorData;
+      } else if (errorData && typeof errorData === 'object') {
+        message = JSON.stringify(errorData);
+      } else {
+        message = error.message;
+      }
+      
+      // Log full error details for debugging
+      logger.error(`Sarvam API ${method} Error Details:`, {
+        status,
+        errorData: typeof errorData === 'object' ? errorData : { raw: errorData },
+        headers: error.response.headers,
+        requestUrl: error.config?.url,
+        requestMethod: error.config?.method
+      });
       
       return new Error(`Sarvam AI ${method} failed (${status}): ${message}`);
     } else if (error.request) {
+      logger.error(`Sarvam API ${method} - No response:`, {
+        timeout: error.code === 'ECONNABORTED',
+        errorCode: error.code
+      });
       return new Error(`Sarvam AI ${method} - No response from server. Check network or API endpoint.`);
     } else {
+      logger.error(`Sarvam API ${method} - Request setup error:`, error.message);
       return new Error(`Sarvam AI ${method} - ${error.message}`);
     }
   }
@@ -418,17 +541,48 @@ export class SarvamRealtimeClient extends EventEmitter {
       }
 
       let result;
+      let originalText = null;
+      let translatedText = null;
+      let detectedLang = null;
+      
+      // Multilingual dual-mode: when language is 'auto', get BOTH original and translated text
+      const dualMode = this.language === 'auto' && process.env.MULTILINGUAL_MODE !== 'false';
+      
       if (this.language === 'auto') {
         if (this.degradedTranslate) {
           // Degraded path: first attempt plain transcribe with fallbackLanguage to get original text
           logger.warn('Translation degraded: using fallback plain transcription path');
           result = await this.sttClient.transcribe(wavBuffer, { language: this.fallbackLanguage, withTimestamps: false });
           result.language = result.language || this.fallbackLanguage;
+          originalText = result.transcript;
         } else {
           try {
-            result = await this.sttClient.transcribeAndTranslate(wavBuffer, { withTimestamps: false });
-            result.language = result.detectedLanguage || 'unknown';
-            logger.debug(`Auto-detected language: ${result.language}`);
+            // Get translated text (in English)
+            const translateResult = await this.sttClient.transcribeAndTranslate(wavBuffer, { withTimestamps: false });
+            translatedText = translateResult.transcript;
+            detectedLang = translateResult.detectedLanguage || 'unknown';
+            logger.debug(`Auto-detected language: ${detectedLang}`);
+            
+            // If dual-mode is enabled and language is not English, also get original text
+            if (dualMode && detectedLang !== 'en-IN' && detectedLang !== 'unknown') {
+              try {
+                logger.info(`Dual-mode: fetching original text in ${detectedLang}`);
+                const originalResult = await this.sttClient.transcribe(wavBuffer, { language: detectedLang, withTimestamps: false });
+                originalText = originalResult.transcript;
+                logger.debug(`Original text retrieved: "${originalText}"`);
+              } catch (origError) {
+                logger.warn(`Failed to get original text in ${detectedLang}: ${origError.message}`);
+                // Continue with just translated text
+              }
+            }
+            
+            // Use translated text as primary result for now
+            result = {
+              transcript: translatedText,
+              language: detectedLang,
+              timestamp: Date.now()
+            };
+            
           } catch (e) {
             this.translateErrorCount++;
             logger.error(`translateAndTranslate failed (count=${this.translateErrorCount}): ${e.message}`);
@@ -439,14 +593,19 @@ export class SarvamRealtimeClient extends EventEmitter {
             // Fallback to plain transcribe attempt
             result = await this.sttClient.transcribe(wavBuffer, { language: this.fallbackLanguage, withTimestamps: false });
             result.language = result.language || this.fallbackLanguage;
+            originalText = result.transcript;
           }
         }
       } else {
         result = await this.sttClient.transcribe(wavBuffer, { language: this.language, withTimestamps: false });
         logger.debug(`Using configured language: ${this.language}`);
+        originalText = result.transcript;
       }
 
       logger.info(`Transcription result: "${result.transcript}" (language: ${result.language})`);
+      if (dualMode && originalText && translatedText) {
+        logger.info(`Dual-mode transcripts - Original: "${originalText}", Translated: "${translatedText}"`);
+      };
 
       const text = (result.transcript || '').trim();
       if (!text) {
@@ -510,12 +669,23 @@ export class SarvamRealtimeClient extends EventEmitter {
       // Accept transcript
       this.lastTranscript = result.transcript.trim();
       this.lastTranscriptTime = now;
-      this.emit('final', {
+      
+      // Emit with dual-mode support
+      const eventData = {
         text: this.lastTranscript,
         timestamp: result.timestamp,
         language: result.language,
         autoDetected: this.language === 'auto'
-      });
+      };
+      
+      // Add dual-mode fields if available
+      if (originalText && translatedText) {
+        eventData.originalText = originalText.trim();
+        eventData.translatedText = translatedText.trim();
+        eventData.dualMode = true;
+      }
+      
+      this.emit('final', eventData);
       this.hadSpeech = false;
       this.unknownStreak = 0;
       // Clear buffers

@@ -273,6 +273,14 @@ export const initSocket = (server) => {
               autoDetected: !!data.autoDetected
             };
             
+            // Add dual-mode transcript fields if available
+            if (data.dualMode && data.originalText && data.translatedText) {
+              segment.originalText = data.originalText;
+              segment.translatedText = data.translatedText;
+              segment.dualMode = true;
+              logger.info(`Dual-mode transcript: original="${data.originalText}", translated="${data.translatedText}"`);
+            }
+            
             // Broadcast to room participants
             io.to(`call:${roomId}`).emit('transcript:new', {
               userId,

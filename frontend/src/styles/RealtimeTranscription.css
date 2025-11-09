@@ -154,6 +154,44 @@
   line-height: 1.5;
 }
 
+/* Dual-mode transcript styling */
+.rt-item.dual-mode {
+  background: rgba(255, 255, 255, 0.08);
+  border-left: 3px solid rgba(255, 165, 0, 0.8);
+}
+
+.rt-dual-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: 4px;
+}
+
+.rt-dual-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.rt-dual-label {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 120px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.rt-text.rt-original {
+  color: #ffd966;
+  font-style: italic;
+}
+
+.rt-text.rt-translated {
+  color: #a8e6cf;
+  font-weight: 500;
+}
+
 /* Scrollbar styling */
 .rt-transcript-list::-webkit-scrollbar {
   width: 6px;
