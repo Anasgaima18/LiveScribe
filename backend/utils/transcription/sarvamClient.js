@@ -239,6 +239,9 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.totalDurationMs = 0;
     this._chunkCount = 0;
     this._droppedChunks = 0;
+    this.speechFrameCount = 0;
+    this.processing = false;
+    this.deferRetry = null;
     this.emit('open');
   }
 
@@ -310,78 +313,63 @@ export class SarvamRealtimeClient extends EventEmitter {
       this.hadSpeech = true;
     }
 
-    // Accumulate non-silent audio
+    // Accumulate audio (speech + limited trailing silence)
     if (!isSilent) {
       this.audioChunks.push(pcm16Buffer);
       this.currentSize += pcm16Buffer.length;
       this.totalDurationMs += durationMs;
+      this.speechFrameCount++;
     } else if (this.hadSpeech && this.silenceCount < 3) {
-      // include limited trailing silence after speech to mark boundary
-      this.audioChunks.push(pcm16Buffer);
+      this.audioChunks.push(pcm16Buffer); // allow brief trailing silence
       this.currentSize += pcm16Buffer.length;
       this.totalDurationMs += durationMs;
     } else if (this.silenceCount >= this.maxSilenceChunks && this.currentSize > 0) {
-      // Long silence (>1s): smart flush if we have speech
       logger.info(`Long silence (${this.silenceCount} chunks) triggering flush of ${this.currentSize} bytes`);
-      if (this.currentSize < this.minFlushBytes) {
-        logger.debug(`Discarding tiny buffer (${this.currentSize} < ${this.minFlushBytes}) - avoid trivial STT response`);
-        this.audioChunks = [];
-        this.currentSize = 0;
-        this.totalDurationMs = 0;
-        this.hadSpeech = false;
-        this.batchStartTime = Date.now();
-      } else {
-        await this._processChunks();
-      }
-      return;
-    }
-
-  // Batching heuristic: flush only when BOTH duration and bytes thresholds are satisfied
-  const shouldFlush = (this.totalDurationMs >= this.minBatchDurationMs) && (this.currentSize >= this.minFlushBytes);
-    
-    if (shouldFlush && this.currentSize > 0) {
-      logger.info(`Batching flush: ${this.currentSize} bytes, ${this.totalDurationMs.toFixed(0)}ms accumulated`);
       await this._processChunks();
       return;
     }
 
-    // Safety flush: if accumulated grows too large
-    const maxBytes = this.chunkSize * 4;
+    // Adaptive flush criteria (duration + bytes + speech frames) with escalation on unknown streak
+    if (this.processing) return; // avoid overlapping STT calls
+    const escalated = this.unknownStreak >= this.maxUnknownStreak;
+    const requiredDuration = escalated ? this.escalatedDurationMs : this.minBatchDurationMs;
+    const requiredBytes = escalated ? this.escalatedFlushBytes : this.minFlushBytes;
+    const shouldFlush = this.totalDurationMs >= requiredDuration &&
+                        this.currentSize >= requiredBytes &&
+                        this.speechFrameCount >= this.minSpeechFrames &&
+                        (!this.deferRetry || Date.now() >= this.deferRetry);
+
+    if (shouldFlush && this.currentSize > 0) {
+      logger.info(`Batching flush: ${this.currentSize} bytes, ${this.totalDurationMs.toFixed(0)}ms (speechFrames=${this.speechFrameCount}, escalated=${escalated})`);
+      await this._processChunks();
+      return;
+    }
+
+    // Safety flush if buffer becomes very large (prevent runaway accumulation)
+    const maxBytes = this.chunkSize * 6; // allow larger due to rebuffering strategy
     if (this.currentSize >= maxBytes) {
       logger.info(`Safety flush at ${this.currentSize} bytes (maxBytes=${maxBytes})`);
       await this._processChunks();
     }
   }
 
-      // Adaptive flush thresholds: if we have repeated unknown-language transcripts, require larger batch
-      const baseDurationReq = (this.totalDurationMs >= this.minBatchDurationMs);
-      const baseBytesReq = (this.currentSize >= this.minFlushBytes);
-      const escalated = this.unknownStreak >= this.maxUnknownStreak;
-      const durationReq = escalated ? (this.totalDurationMs >= this.escalatedDurationMs) : baseDurationReq;
-      const bytesReq = escalated ? (this.currentSize >= this.escalatedFlushBytes) : baseBytesReq;
-      const speechReq = (this.speechFrameCount >= this.minSpeechFrames);
-      const shouldFlush = durationReq && bytesReq && speechReq;
+  async _processChunks() {
     if (this.audioChunks.length === 0) return;
-
+    if (this.processing) return; // guard
+    this.processing = true;
     try {
       const audioBuffer = Buffer.concat(this.audioChunks);
-      // If buffer still too small, keep accumulating (do not reset)
       if (audioBuffer.length < this.minFlushBytes) {
         if (this.debugCapture) {
           logger.debug(`Deferring STT: only ${audioBuffer.length} bytes (${this.totalDurationMs.toFixed(0)}ms) < minFlushBytes=${this.minFlushBytes}`);
         }
+        this.processing = false;
         return;
       }
 
       logger.info(`Processing ${audioBuffer.length} bytes for transcription (${this.audioChunks.length} chunks, ${this.totalDurationMs.toFixed(0)}ms)`);
-      
-      // Reset state now that we will send to STT
-      this.audioChunks = [];
-      this.currentSize = 0;
-      this.totalDurationMs = 0;
-      this.batchStartTime = Date.now();
 
-      // Aggregate RMS gating before converting
+      // Aggregate RMS gate
       const samples = new Int16Array(audioBuffer.buffer, audioBuffer.byteOffset, audioBuffer.length / 2);
       if (samples.length > 0) {
         let sum = 0, peak = 0;
@@ -393,16 +381,16 @@ export class SarvamRealtimeClient extends EventEmitter {
         const aggRms = Math.sqrt(sum / samples.length);
         if (aggRms < this.minRmsInt16) {
           logger.debug(`Skipping STT call: aggregate RMS ${aggRms.toFixed(0)} below ${this.minRmsInt16}`);
+          this.processing = false;
           this.hadSpeech = false;
+          // keep buffer for potential accumulation (do not clear)
           return;
         }
       }
 
-      // Convert raw PCM16 to WAV format for Sarvam
       const wavBuffer = this._pcm16ToWav(audioBuffer, 16000, 1);
       logger.debug(`Converted to WAV: ${wavBuffer.length} bytes`);
 
-      // Optional debug dump of WAV for inspection
       if (process.env.SARVAM_DEBUG_DUMP_WAV === 'true') {
         try {
           const fs = await import('fs');
@@ -419,18 +407,11 @@ export class SarvamRealtimeClient extends EventEmitter {
 
       let result;
       if (this.language === 'auto') {
-        // Auto-detect + translate to English
-        result = await this.sttClient.transcribeAndTranslate(wavBuffer, {
-          withTimestamps: false,
-        });
-        // Normalize result fields for downstream usage
+        result = await this.sttClient.transcribeAndTranslate(wavBuffer, { withTimestamps: false });
         result.language = result.detectedLanguage || 'unknown';
         logger.debug(`Auto-detected language: ${result.language}`);
       } else {
-        result = await this.sttClient.transcribe(wavBuffer, {
-          language: this.language,
-          withTimestamps: false,
-        });
+        result = await this.sttClient.transcribe(wavBuffer, { language: this.language, withTimestamps: false });
         logger.debug(`Using configured language: ${this.language}`);
       }
 
@@ -439,51 +420,83 @@ export class SarvamRealtimeClient extends EventEmitter {
       const text = (result.transcript || '').trim();
       if (!text) {
         logger.warn('Empty transcript received from Sarvam API');
-        return;
-      }
-      
-      // QUALITY CHECK: If language is unknown and transcript is short, likely hallucination
-      if (result.language === 'unknown' && text.length < 20) {
-        logger.warn(`Rejected low-quality transcript: "${text}" (language unknown, too short)`);
+        this.processing = false;
+        // keep buffer for more accumulation
         return;
       }
 
-      // Enhanced duplicate / filler suppression with minimum word count filter
-      const now = Date.now();
-      const lower = text.toLowerCase();
+      // Unknown short hallucination handling (rebuffer & escalate)
+      if (result.language === 'unknown' && text.length < 20) {
+        this.unknownStreak++;
+        logger.warn(`Rejected low-quality transcript: "${text}" (language unknown, too short) streak=${this.unknownStreak}`);
+        // Defer next attempt slightly to allow more audio
+        this.deferRetry = Date.now() + 600;
+        this.processing = false;
+        return; // keep buffers intact
+      }
+
+      // Fallback retry for longer unknown-language transcripts
+      if (result.language === 'unknown' && text.length >= 20) {
+        logger.info(`Unknown language with longer text; attempting fallback language transcription (${this.fallbackLanguage})`);
+        try {
+          const retry = await this.sttClient.transcribe(wavBuffer, { language: this.fallbackLanguage, withTimestamps: false });
+          if (retry.transcript && retry.transcript.trim().length > 0) {
+            result.transcript = retry.transcript.trim();
+            result.language = this.fallbackLanguage;
+            logger.info('Fallback transcription succeeded');
+          }
+        } catch (e) {
+          logger.warn(`Fallback transcription failed: ${e.message}`);
+        }
+      }
+
+      // Minimum quality checks
+      const lower = result.transcript.toLowerCase();
       const words = lower.split(/\s+/).filter(w => w.length > 0);
       const wordCount = words.length;
-      
-      // REJECT any transcript with fewer than minWordCount words (unless it's a long single word)
-      if (wordCount < this.minWordCount && text.length < 15) {
-        logger.info(`Rejected short transcript: "${text}" (${wordCount} words, ${text.length} chars) - below minimum word count ${this.minWordCount}`);
-        return;
+      if (wordCount < this.minWordCount && result.transcript.length < 15) {
+        const hasLongToken = words.some(w => w.replace(/[^a-z0-9]/gi,'').length >= 7);
+        if (!hasLongToken) {
+          logger.info(`Rejected short transcript: "${result.transcript}" (${wordCount} words)`);
+          this.processing = false;
+          // keep buffer for more accumulation
+          return;
+        }
       }
-      
-      // Check if it's a 1-2 word generic filler
+
+      // Duplicate / filler suppression
       const isFillWords = wordCount <= 2 && words.every(w => this.genericFillers.includes(w.replace(/[.!?,]/g, '')));
-      
-      // Suppress if: filler + repeated within window OR identical repeated within shorter window
+      const now = Date.now();
       const duplicate = (isFillWords && this.lastTranscript.toLowerCase() === lower && (now - this.lastTranscriptTime) < this.duplicateWindowMs) ||
-                       (this.lastTranscript.toLowerCase() === lower && (now - this.lastTranscriptTime) < 2000);
-      
+                        (this.lastTranscript.toLowerCase() === lower && (now - this.lastTranscriptTime) < 2000);
       if (duplicate) {
-        logger.info(`Suppressed duplicate/filler transcript: "${text}" (${wordCount} words) within ${this.duplicateWindowMs}ms window`);
+        logger.info(`Suppressed duplicate/filler transcript: "${result.transcript}"`);
+        this.processing = false;
+        // keep buffer (maybe more context next time)
         return;
       }
 
-      this.lastTranscript = text;
+      // Accept transcript
+      this.lastTranscript = result.transcript.trim();
       this.lastTranscriptTime = now;
-
       this.emit('final', {
-        text,
+        text: this.lastTranscript,
         timestamp: result.timestamp,
         language: result.language,
         autoDetected: this.language === 'auto'
       });
-      this.hadSpeech = false; // reset boundary state after successful emission
+      this.hadSpeech = false;
+      this.unknownStreak = 0;
+      // Clear buffers
+      this.audioChunks = [];
+      this.currentSize = 0;
+      this.totalDurationMs = 0;
+      this.speechFrameCount = 0;
+      this.batchStartTime = Date.now();
+      this.processing = false;
     } catch (error) {
       logger.error('Error processing audio chunks:', error);
+      this.processing = false;
       this.emit('error', error);
     }
   }
