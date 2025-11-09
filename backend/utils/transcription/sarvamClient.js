@@ -207,7 +207,7 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.duplicateWindowMs = options.duplicateWindowMs || 3000; // suppress duplicates within 3s
     this.genericFillers = options.genericFillers || ['yes', 'yeah', 'ya', 'ok', 'okay', 'hmm', 'uh', 'um'];
     this.hadSpeech = false;
-    this.minFlushBytes = options.minFlushBytes || 51200; // Increased to ~3.2s @ 16kHz to avoid short transcripts
+  this.minFlushBytes = options.minFlushBytes || 51200; // ~1.6s @ 16kHz (25600 samples)
     
     // Batching configuration - increased to 800ms to reduce filler transcripts
     this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 800; // min 800ms batch
@@ -327,8 +327,8 @@ export class SarvamRealtimeClient extends EventEmitter {
       return;
     }
 
-    // Batching heuristic: flush when duration >= minBatchDurationMs OR bytes >= threshold
-    const shouldFlush = this.totalDurationMs >= this.minBatchDurationMs || this.currentSize >= (this.chunkSize * 2);
+  // Batching heuristic: flush only when BOTH duration and bytes thresholds are satisfied
+  const shouldFlush = (this.totalDurationMs >= this.minBatchDurationMs) && (this.currentSize >= this.minFlushBytes);
     
     if (shouldFlush && this.currentSize > 0) {
       logger.info(`Batching flush: ${this.currentSize} bytes, ${this.totalDurationMs.toFixed(0)}ms accumulated`);
@@ -349,9 +349,17 @@ export class SarvamRealtimeClient extends EventEmitter {
 
     try {
       const audioBuffer = Buffer.concat(this.audioChunks);
+      // If buffer still too small, keep accumulating (do not reset)
+      if (audioBuffer.length < this.minFlushBytes) {
+        if (this.debugCapture) {
+          logger.debug(`Deferring STT: only ${audioBuffer.length} bytes (${this.totalDurationMs.toFixed(0)}ms) < minFlushBytes=${this.minFlushBytes}`);
+        }
+        return;
+      }
+
       logger.info(`Processing ${audioBuffer.length} bytes for transcription (${this.audioChunks.length} chunks, ${this.totalDurationMs.toFixed(0)}ms)`);
       
-      // Reset state
+      // Reset state now that we will send to STT
       this.audioChunks = [];
       this.currentSize = 0;
       this.totalDurationMs = 0;
