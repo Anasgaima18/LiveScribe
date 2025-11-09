@@ -220,6 +220,15 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.minWordCount = parseInt(process.env.MIN_WORD_COUNT) || 3; // require at least 3 words
     
     this.debugCapture = (process.env.DEBUG_AUDIO_CAPTURE === 'true');
+
+    // Adaptive handling for repeated unknown / low-quality transcripts
+    this.unknownStreak = 0; // consecutive unknown-language short transcripts
+    this.maxUnknownStreak = parseInt(process.env.SARVAM_MAX_UNKNOWN_STREAK) || 3;
+    this.fallbackLanguage = process.env.SARVAM_FALLBACK_LANGUAGE || 'en-IN';
+    this.escalatedDurationMs = parseInt(process.env.SARVAM_ESCALATED_DURATION_MS) || 1600; // escalate to 1.6s if streak
+    this.escalatedFlushBytes = parseInt(process.env.SARVAM_ESCALATED_FLUSH_BYTES) || 76800; // ~2.4s @ 16kHz
+    this.minSpeechFrames = parseInt(process.env.MIN_SPEECH_FRAMES) || 4; // speech frames required before flush
+    this.speechFrameCount = 0; // number of speech chunks in current batch
   }
 
   start() {
@@ -344,7 +353,14 @@ export class SarvamRealtimeClient extends EventEmitter {
     }
   }
 
-  async _processChunks() {
+      // Adaptive flush thresholds: if we have repeated unknown-language transcripts, require larger batch
+      const baseDurationReq = (this.totalDurationMs >= this.minBatchDurationMs);
+      const baseBytesReq = (this.currentSize >= this.minFlushBytes);
+      const escalated = this.unknownStreak >= this.maxUnknownStreak;
+      const durationReq = escalated ? (this.totalDurationMs >= this.escalatedDurationMs) : baseDurationReq;
+      const bytesReq = escalated ? (this.currentSize >= this.escalatedFlushBytes) : baseBytesReq;
+      const speechReq = (this.speechFrameCount >= this.minSpeechFrames);
+      const shouldFlush = durationReq && bytesReq && speechReq;
     if (this.audioChunks.length === 0) return;
 
     try {
