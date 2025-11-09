@@ -270,10 +270,14 @@ export class SarvamSTTClient {
       const errorData = error.response.data;
       
       // Extract error message with fallback to stringified object
+      // Handle nested error structures like { error: { message: "..." } }
       let message;
       if (errorData?.message) {
         message = errorData.message;
-      } else if (errorData?.error) {
+      } else if (errorData?.error?.message) {
+        // Nested error object (Sarvam API format)
+        message = errorData.error.message;
+      } else if (typeof errorData?.error === 'string') {
         message = errorData.error;
       } else if (errorData?.detail) {
         message = errorData.detail;
@@ -303,7 +307,7 @@ export class SarvamSTTClient {
       return new Error(`Sarvam AI ${method} - No response from server. Check network or API endpoint.`);
     } else {
       logger.error(`Sarvam API ${method} - Request setup error:`, error.message);
-      return new Error(`Sarvam AI ${method} - ${error.message}`);
+      return new Error(`Sarvam API ${method} - ${error.message}`);
     }
   }
 }
@@ -352,9 +356,10 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.escalatedFlushBytes = parseInt(process.env.SARVAM_ESCALATED_FLUSH_BYTES) || 76800; // ~2.4s @ 16kHz
     this.minSpeechFrames = parseInt(process.env.MIN_SPEECH_FRAMES) || 4; // speech frames required before flush
     this.speechFrameCount = 0; // number of speech chunks in current batch
-    // Hard caps to prevent runaway accumulation (avoid huge 150s batches causing 400 errors)
-    this.maxBatchDurationMs = parseInt(process.env.MAX_BATCH_DURATION_MS) || 6000; // 6s hard cap
-    this.maxBatchBytes = parseInt(process.env.MAX_BATCH_BYTES) || (16000 * 2 * 6); // ≈192000 bytes @ 16kHz mono 6s
+    // Hard caps to prevent runaway accumulation - Sarvam API has 30s limit for realtime endpoint
+    // Use 25s to leave margin for processing delays and network latency
+    this.maxBatchDurationMs = parseInt(process.env.MAX_BATCH_DURATION_MS) || 25000; // 25s hard cap (Sarvam limit: 30s)
+    this.maxBatchBytes = parseInt(process.env.MAX_BATCH_BYTES) || (16000 * 2 * 25); // ≈800000 bytes @ 16kHz mono 25s
     // Translation error tracking / degradation
     this.translateErrorCount = 0;
     this.maxTranslateErrors = parseInt(process.env.MAX_TRANSLATE_ERRORS) || 3;

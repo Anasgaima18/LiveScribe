@@ -318,7 +318,11 @@ export const initSocket = (server) => {
         sarvamSession.on('error', (err) => {
           try {
             logger.error('Sarvam session error:', err);
-            socket.emit('transcript:status', { status: 'error', reason: err.message });
+            // Ensure error message is a string, even if err.message contains objects
+            const errorMessage = typeof err === 'string' ? err : 
+                                err.message || 
+                                (err.toString && err.toString() !== '[object Object]' ? err.toString() : JSON.stringify(err));
+            socket.emit('transcript:status', { status: 'error', reason: errorMessage });
           } catch (emitErr) {
             logger.error('Error emitting error status:', emitErr);
           }
