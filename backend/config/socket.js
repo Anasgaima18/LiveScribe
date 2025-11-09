@@ -201,6 +201,8 @@ export const initSocket = (server) => {
     // Client can send raw PCM chunks; backend forwards to Sarvam and emits
     // 'transcript:new' events to the room. This is a skeleton; fill Sarvam client.
     let sarvamSession = null;
+    let sarvamReady = false;
+    let audioQueue = [];
   socket.on('transcription:start', async ({ roomId, language = 'en' }) => {
       // Wrap EVERYTHING in try-catch to prevent socket disconnection
       try {
@@ -317,9 +319,26 @@ export const initSocket = (server) => {
         sarvamSession.on('open', () => {
           try {
             logger.info(`Sarvam transcription started for user ${socket.user.name}`);
+            sarvamReady = true;
             socket.emit('transcript:status', { status: 'active', provider: 'sarvam' });
+            // Process any queued audio chunks
+            if (audioQueue.length > 0) {
+              logger.info(`Processing ${audioQueue.length} queued audio chunks`);
+              audioQueue.forEach(({ chunk, meta }) => {
+                try {
+                  const buf = Buffer.from(chunk, 'base64');
+                  const maybePromise = sarvamSession.sendAudio(buf, meta);
+                  if (maybePromise && typeof maybePromise.catch === 'function') {
+                    maybePromise.catch((err) => logger.error('Queued audio sendAudio failed:', err));
+                  }
+                } catch (e) {
+                  logger.error('Failed to process queued audio chunk:', e);
+                }
+              });
+              audioQueue = [];
+            }
           } catch (err) {
-            logger.error('Error emitting active status:', err);
+            logger.error('Error in open handler:', err);
           }
         });
         
@@ -351,7 +370,20 @@ export const initSocket = (server) => {
 
     socket.on('transcription:audio', ({ chunk, meta }) => {
       try {
-        if (sarvamSession && chunk) {
+        if (!sarvamSession) {
+          // Session not created yet - silently drop (user may have stopped before start completed)
+          return;
+        }
+        
+        if (!sarvamReady) {
+          // Queue audio chunks until session is ready
+          if (audioQueue.length < 100) { // cap queue to prevent memory issues
+            audioQueue.push({ chunk, meta });
+          }
+          return;
+        }
+        
+        if (chunk) {
           // Log metadata if present (first 10 chunks for debugging)
           if (meta && sarvamSession._chunkCount < 10) {
             logger.info(`Chunk meta: RMS_Int16=${meta.rmsInt16?.toFixed(0)}, Duration=${meta.durationMs?.toFixed(1)}ms, Samples=${meta.samples}`);
@@ -365,8 +397,6 @@ export const initSocket = (server) => {
               logger.error('sarvamSession.sendAudio failed:', err);
             });
           }
-        } else if (!sarvamSession) {
-          logger.warn('Received audio chunk but sarvamSession is not initialized');
         }
       } catch (e) {
         logger.error('transcription:audio error:', e);
@@ -410,6 +440,8 @@ export const initSocket = (server) => {
           await sarvamSession.close();
         }
         sarvamSession = null;
+        sarvamReady = false;
+        audioQueue = [];
       } catch (e) {
         logger.error('Failed to stop transcription:', e);
       }
@@ -437,6 +469,8 @@ export const initSocket = (server) => {
         logger.error('Error while closing Sarvam session on disconnect:', closeErr);
       } finally {
         sarvamSession = null;
+        sarvamReady = false;
+        audioQueue = [];
       }
 
       activeUsers.delete(userId);
