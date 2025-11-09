@@ -229,6 +229,13 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.escalatedFlushBytes = parseInt(process.env.SARVAM_ESCALATED_FLUSH_BYTES) || 76800; // ~2.4s @ 16kHz
     this.minSpeechFrames = parseInt(process.env.MIN_SPEECH_FRAMES) || 4; // speech frames required before flush
     this.speechFrameCount = 0; // number of speech chunks in current batch
+    // Hard caps to prevent runaway accumulation (avoid huge 150s batches causing 400 errors)
+    this.maxBatchDurationMs = parseInt(process.env.MAX_BATCH_DURATION_MS) || 6000; // 6s hard cap
+    this.maxBatchBytes = parseInt(process.env.MAX_BATCH_BYTES) || (16000 * 2 * 6); // ≈192000 bytes @ 16kHz mono 6s
+    // Translation error tracking / degradation
+    this.translateErrorCount = 0;
+    this.maxTranslateErrors = parseInt(process.env.MAX_TRANSLATE_ERRORS) || 3;
+    this.degradedTranslate = false; // when true skip translate endpoint
   }
 
   start() {
@@ -242,6 +249,8 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.speechFrameCount = 0;
     this.processing = false;
     this.deferRetry = null;
+    this.translateErrorCount = 0;
+    this.degradedTranslate = false;
     this.emit('open');
   }
 
@@ -339,7 +348,10 @@ export class SarvamRealtimeClient extends EventEmitter {
                         this.speechFrameCount >= this.minSpeechFrames &&
                         (!this.deferRetry || Date.now() >= this.deferRetry);
 
-    if (shouldFlush && this.currentSize > 0) {
+    // Hard cap flush (protect against mis-calibration leading to huge buffers)
+    const capExceeded = this.totalDurationMs >= this.maxBatchDurationMs || this.currentSize >= this.maxBatchBytes;
+
+    if ((shouldFlush || capExceeded) && this.currentSize > 0) {
       logger.info(`Batching flush: ${this.currentSize} bytes, ${this.totalDurationMs.toFixed(0)}ms (speechFrames=${this.speechFrameCount}, escalated=${escalated})`);
       await this._processChunks();
       return;
@@ -407,9 +419,28 @@ export class SarvamRealtimeClient extends EventEmitter {
 
       let result;
       if (this.language === 'auto') {
-        result = await this.sttClient.transcribeAndTranslate(wavBuffer, { withTimestamps: false });
-        result.language = result.detectedLanguage || 'unknown';
-        logger.debug(`Auto-detected language: ${result.language}`);
+        if (this.degradedTranslate) {
+          // Degraded path: first attempt plain transcribe with fallbackLanguage to get original text
+          logger.warn('Translation degraded: using fallback plain transcription path');
+          result = await this.sttClient.transcribe(wavBuffer, { language: this.fallbackLanguage, withTimestamps: false });
+          result.language = result.language || this.fallbackLanguage;
+        } else {
+          try {
+            result = await this.sttClient.transcribeAndTranslate(wavBuffer, { withTimestamps: false });
+            result.language = result.detectedLanguage || 'unknown';
+            logger.debug(`Auto-detected language: ${result.language}`);
+          } catch (e) {
+            this.translateErrorCount++;
+            logger.error(`translateAndTranslate failed (count=${this.translateErrorCount}): ${e.message}`);
+            if (this.translateErrorCount >= this.maxTranslateErrors) {
+              this.degradedTranslate = true;
+              logger.warn('Max translate errors reached; degrading translation mode to plain transcription');
+            }
+            // Fallback to plain transcribe attempt
+            result = await this.sttClient.transcribe(wavBuffer, { language: this.fallbackLanguage, withTimestamps: false });
+            result.language = result.language || this.fallbackLanguage;
+          }
+        }
       } else {
         result = await this.sttClient.transcribe(wavBuffer, { language: this.language, withTimestamps: false });
         logger.debug(`Using configured language: ${this.language}`);
@@ -496,6 +527,12 @@ export class SarvamRealtimeClient extends EventEmitter {
       this.processing = false;
     } catch (error) {
       logger.error('Error processing audio chunks:', error);
+      // On translation-specific errors, they are counted above. For generic errors -> clear buffers to avoid gigantic repeats.
+      this.audioChunks = [];
+      this.currentSize = 0;
+      this.totalDurationMs = 0;
+      this.speechFrameCount = 0;
+      this.batchStartTime = Date.now();
       this.processing = false;
       this.emit('error', error);
     }
