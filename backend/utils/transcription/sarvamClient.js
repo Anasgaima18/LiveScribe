@@ -12,11 +12,26 @@ import logger from '../../config/logger.js';
 
 const SARVAM_BASE_URL = 'https://api.sarvam.ai';
 
-// Sarvam AI supported language codes
+// Sarvam AI supported language codes (11 Indian languages + auto)
 const SUPPORTED_LANGUAGES = [
   'auto', // Auto-detect (for translate endpoint)
   'en-IN', 'hi-IN', 'bn-IN', 'kn-IN', 'ml-IN', 'mr-IN', 
   'od-IN', 'pa-IN', 'ta-IN', 'te-IN', 'gu-IN'
+];
+
+// Common Indian languages for fallback attempts (ordered by usage)
+const FALLBACK_LANGUAGE_PRIORITY = [
+  'hi-IN', // Hindi - most widely spoken
+  'en-IN', // English
+  'te-IN', // Telugu
+  'ta-IN', // Tamil
+  'mr-IN', // Marathi
+  'gu-IN', // Gujarati
+  'kn-IN', // Kannada
+  'ml-IN', // Malayalam
+  'bn-IN', // Bengali
+  'pa-IN', // Punjabi
+  'od-IN'  // Odia
 ];
 
 // Max file size for Sarvam API (10MB limit)
@@ -195,11 +210,27 @@ export class SarvamSTTClient {
         },
       });
 
-      logger.debug(`Sarvam translate response: status=${response.status}, transcript="${response.data.transcript}", detected=${response.data.language}`);
+      // Log full response for debugging language detection
+      logger.debug(`Sarvam translate full response:`, {
+        status: response.status,
+        data: response.data,
+        transcript: response.data.transcript,
+        language: response.data.language,
+        languageCode: response.data.language_code,
+        detectedLang: response.data.detected_language,
+        sourceLanguage: response.data.source_language
+      });
+
+      // Try multiple possible language field names from Sarvam API
+      const detectedLanguage = response.data.language || 
+                              response.data.language_code || 
+                              response.data.detected_language ||
+                              response.data.source_language ||
+                              'unknown';
 
       return {
         transcript: response.data.transcript || '',
-        detectedLanguage: response.data.language || 'unknown',
+        detectedLanguage: detectedLanguage,
         timestamp: Date.now(),
       };
     } catch (error) {
@@ -562,31 +593,54 @@ export class SarvamRealtimeClient extends EventEmitter {
           originalText = result.transcript;
         } else {
           try {
-            // Get translated text (in English)
+            // Get translated text (in English) - this should auto-detect language
             const translateResult = await this.sttClient.transcribeAndTranslate(wavBuffer, { withTimestamps: false });
             translatedText = translateResult.transcript;
             detectedLang = translateResult.detectedLanguage || 'unknown';
-            logger.debug(`Auto-detected language: ${detectedLang}`);
+            logger.info(`Auto-detected language from translate API: ${detectedLang}, translated text: "${translatedText}"`);
             
-            // If dual-mode is enabled, try to get original text
-            // If language is unknown, use fallback language (likely non-English if translation worked)
+            // If dual-mode is enabled, try to get original text in source language
             if (dualMode && translatedText && translatedText.length > 0) {
               try {
-                const originalLang = (detectedLang !== 'unknown' && detectedLang !== 'en-IN') 
-                  ? detectedLang 
-                  : this.fallbackLanguage;
+                let originalLang = detectedLang;
                 
-                logger.info(`Dual-mode: fetching original text in ${originalLang}`);
+                // If language is unknown or English, try Hindi first (most common Indian language)
+                // The translate API returns English translation, so if it detected "unknown" 
+                // it likely means non-English source that wasn't properly identified
+                if (detectedLang === 'unknown') {
+                  logger.info(`Dual-mode: language unknown, trying primary Indian language (${FALLBACK_LANGUAGE_PRIORITY[0]})`);
+                  originalLang = FALLBACK_LANGUAGE_PRIORITY[0]; // Hindi
+                } else if (detectedLang === 'en-IN') {
+                  // If detected as English but we have translation, it might be code-mixed
+                  // Try Hindi for original to see if we get different result
+                  logger.info(`Dual-mode: detected as English, checking for code-mixing with Hindi`);
+                  originalLang = 'hi-IN';
+                } else {
+                  logger.info(`Dual-mode: fetching original text in detected language ${detectedLang}`);
+                }
+                
                 const originalResult = await this.sttClient.transcribe(wavBuffer, { language: originalLang, withTimestamps: false });
                 originalText = originalResult.transcript;
-                logger.debug(`Original text retrieved: "${originalText}"`);
+                logger.info(`Original text in ${originalLang}: "${originalText}"`);
                 
-                // Update detected language if it was unknown
-                if (detectedLang === 'unknown') {
-                  detectedLang = originalLang;
+                // If original and translated are very similar (English input), skip dual display
+                if (originalText && translatedText) {
+                  const similarity = this._calculateSimilarity(originalText.toLowerCase(), translatedText.toLowerCase());
+                  if (similarity > 0.8) {
+                    logger.info(`Original and translated text are ${(similarity * 100).toFixed(0)}% similar - likely English input, skipping dual-mode`);
+                    originalText = null; // Don't show dual mode for English
+                    translatedText = null;
+                    detectedLang = 'en-IN';
+                  } else {
+                    logger.info(`Dual-mode activated: original differs from translation (similarity: ${(similarity * 100).toFixed(0)}%)`);
+                    // Update detected language if it was unknown
+                    if (detectedLang === 'unknown') {
+                      detectedLang = originalLang;
+                    }
+                  }
                 }
               } catch (origError) {
-                logger.warn(`Failed to get original text in ${detectedLang || this.fallbackLanguage}: ${origError.message}`);
+                logger.warn(`Failed to get original text: ${origError.message}`);
                 // Continue with just translated text
               }
             }
@@ -732,6 +786,49 @@ export class SarvamRealtimeClient extends EventEmitter {
     }
     
     this.emit('close');
+  }
+
+  /**
+   * Calculate text similarity (0-1) using Levenshtein-based ratio
+   * Used to detect if original and translated text are essentially the same (English input)
+   */
+  _calculateSimilarity(str1, str2) {
+    // Quick check for identical strings
+    if (str1 === str2) return 1.0;
+    
+    // Normalize: remove punctuation, extra spaces
+    const normalize = (s) => s.replace(/[.,!?;:]/g, '').replace(/\s+/g, ' ').trim();
+    const s1 = normalize(str1);
+    const s2 = normalize(str2);
+    
+    if (s1 === s2) return 1.0;
+    
+    // Calculate Levenshtein distance
+    const len1 = s1.length;
+    const len2 = s2.length;
+    
+    if (len1 === 0) return len2 === 0 ? 1.0 : 0.0;
+    if (len2 === 0) return 0.0;
+    
+    const matrix = Array(len2 + 1).fill(null).map(() => Array(len1 + 1).fill(0));
+    
+    for (let i = 0; i <= len1; i++) matrix[0][i] = i;
+    for (let j = 0; j <= len2; j++) matrix[j][0] = j;
+    
+    for (let j = 1; j <= len2; j++) {
+      for (let i = 1; i <= len1; i++) {
+        const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+        matrix[j][i] = Math.min(
+          matrix[j - 1][i] + 1,     // deletion
+          matrix[j][i - 1] + 1,     // insertion
+          matrix[j - 1][i - 1] + cost // substitution
+        );
+      }
+    }
+    
+    const distance = matrix[len2][len1];
+    const maxLen = Math.max(len1, len2);
+    return 1.0 - (distance / maxLen);
   }
 
   /**
