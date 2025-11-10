@@ -568,15 +568,25 @@ export class SarvamRealtimeClient extends EventEmitter {
             detectedLang = translateResult.detectedLanguage || 'unknown';
             logger.debug(`Auto-detected language: ${detectedLang}`);
             
-            // If dual-mode is enabled and language is not English, also get original text
-            if (dualMode && detectedLang !== 'en-IN' && detectedLang !== 'unknown') {
+            // If dual-mode is enabled, try to get original text
+            // If language is unknown, use fallback language (likely non-English if translation worked)
+            if (dualMode && translatedText && translatedText.length > 0) {
               try {
-                logger.info(`Dual-mode: fetching original text in ${detectedLang}`);
-                const originalResult = await this.sttClient.transcribe(wavBuffer, { language: detectedLang, withTimestamps: false });
+                const originalLang = (detectedLang !== 'unknown' && detectedLang !== 'en-IN') 
+                  ? detectedLang 
+                  : this.fallbackLanguage;
+                
+                logger.info(`Dual-mode: fetching original text in ${originalLang}`);
+                const originalResult = await this.sttClient.transcribe(wavBuffer, { language: originalLang, withTimestamps: false });
                 originalText = originalResult.transcript;
                 logger.debug(`Original text retrieved: "${originalText}"`);
+                
+                // Update detected language if it was unknown
+                if (detectedLang === 'unknown') {
+                  detectedLang = originalLang;
+                }
               } catch (origError) {
-                logger.warn(`Failed to get original text in ${detectedLang}: ${origError.message}`);
+                logger.warn(`Failed to get original text in ${detectedLang || this.fallbackLanguage}: ${origError.message}`);
                 // Continue with just translated text
               }
             }
