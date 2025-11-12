@@ -255,6 +255,9 @@ export class SarvamSTTClient {
       // Log request details
       logger.info(`Sarvam transcribe+translate request: size=${audioBuffer.length} bytes (auto-detect)`);
 
+      // Enable preprocessing for best quality
+      form.append('enable_preprocessing', String(options.enablePreprocessing !== undefined ? options.enablePreprocessing : true));
+
       const response = await this.client.post('/speech-to-text-translate', form, {
         headers: {
           ...form.getHeaders(),
@@ -786,6 +789,8 @@ export class SarvamRealtimeClient extends EventEmitter {
             // Test languages one-by-one with minimal delays to respect API rate limits
             const allResults = [];
             const delayBetweenRequests = parseInt(process.env.SARVAM_API_DELAY_MS) || 80; // 80ms delay = ~12 req/s (safe for Sarvam)
+            const emptyBreakThreshold = parseInt(process.env.EMPTY_BREAK_THRESHOLD || '4');
+            let consecutiveEmpties = 0;
             
             for (let i = 0; i < languagesToTry.length; i++) {
               const lang = languagesToTry[i];
@@ -807,6 +812,9 @@ export class SarvamRealtimeClient extends EventEmitter {
                   transcript = (retryResult.transcript || '').trim();
                   if (transcript.length > 0) {
                     logger.info(`[Batch ${batchId}] ${lang} retry succeeded: "${transcript.substring(0, 30)}..."`);
+                    consecutiveEmpties = 0;
+                  } else {
+                    consecutiveEmpties++;
                   }
                 }
                 
@@ -856,6 +864,12 @@ export class SarvamRealtimeClient extends EventEmitter {
                   avgWordLength: avgWordLength,
                   qualityScore: qualityScore
                 });
+
+                // Early break if too many empties in a row (likely silence/too quiet or wrong batch)
+                if (consecutiveEmpties >= emptyBreakThreshold) {
+                  logger.warn(`[Batch ${batchId}] ${consecutiveEmpties} consecutive empty transcripts — stopping language loop early`);
+                  break;
+                }
                 
                 // ENHANCED LANGUAGE-SPECIFIC VALIDATION - ALL 11 languages with script detection
                 // Best detection requires validating each language's unique script
@@ -982,14 +996,29 @@ export class SarvamRealtimeClient extends EventEmitter {
             validResults.sort((a, b) => b.qualityScore - a.qualityScore);
             
             if (validResults.length === 0) {
-              // No usable transcript yet; accumulate more audio and retry next flush
-              this.emptyBatchStreak++;
-              const backoffMs = Math.min(1500, 300 * this.emptyBatchStreak);
-              logger.warn(`[Batch ${batchId}] All ${allResults.length} languages empty. Backing off ${backoffMs}ms and accumulating more audio (streak=${this.emptyBatchStreak})`);
-              this.deferRetry = Date.now() + backoffMs;
-              this.processing = false;
-              // Do NOT clear buffers; keep accumulating for more context
-              return;
+              // Try auto transcribe+translate as an additional fallback when all are empty
+              try {
+                logger.warn(`[Batch ${batchId}] All ${allResults.length} languages empty — trying transcribe+translate(auto) before backoff`);
+                const auto = await this.sttClient.transcribeAndTranslate(wavBuffer, { model: 'saaras:v2.5', enablePreprocessing: true });
+                const autoText = (auto.transcript || '').trim();
+                if (autoText.length > 0) {
+                  originalText = autoText;
+                  translatedText = autoText;
+                  detectedLang = this._normalizeLanguageCode(auto.detectedLanguage) || 'unknown';
+                  result = { transcript: translatedText, language: detectedLang, timestamp: Date.now() };
+                } else {
+                  throw new Error('auto transcribe+translate returned empty');
+                }
+              } catch (autoEmptyErr) {
+                // No usable transcript yet; accumulate more audio and retry next flush
+                this.emptyBatchStreak++;
+                const backoffMs = Math.min(1500, 300 * this.emptyBatchStreak);
+                logger.warn(`[Batch ${batchId}] All languages empty after auto TT. Backing off ${backoffMs}ms and accumulating more audio (streak=${this.emptyBatchStreak})`);
+                this.deferRetry = Date.now() + backoffMs;
+                this.processing = false;
+                // Do NOT clear buffers; keep accumulating for more context
+                return;
+              }
             }
             
             // Pick the best result
