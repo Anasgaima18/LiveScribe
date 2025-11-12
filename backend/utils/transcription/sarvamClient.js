@@ -1,7 +1,14 @@
 /**
- * Sarvam AI Speech-to-Text Client
+ * Sarvam AI Speech-to-Text Client - Production Grade
  * Node.js implementation using Sarvam REST APIs
  * Get your Sarvam AI API subscription key here: https://dashboard.sarvam.ai/admin
+ * 
+ * Features:
+ * - Industry-standard audio preprocessing and analysis
+ * - Advanced language detection with confidence scoring
+ * - Production-grade performance monitoring
+ * - Adaptive batching with quality gates
+ * - Comprehensive error handling and retries
  */
 
 import axios from 'axios';
@@ -9,6 +16,9 @@ import FormData from 'form-data';
 import { Readable } from 'stream';
 import EventEmitter from 'events';
 import logger from '../../config/logger.js';
+import AudioQualityAnalyzer, { formatQualityMetrics } from './audioQualityAnalyzer.js';
+import PerformanceMonitor from './performanceMonitor.js';
+import { getConfig, AUDIO_SPECS, FALLBACK_LANGUAGE_PRIORITY as FALLBACK_LANGS } from './sarvamConfig.js';
 
 const SARVAM_BASE_URL = 'https://api.sarvam.ai';
 
@@ -20,19 +30,8 @@ const SUPPORTED_LANGUAGES = [
 ];
 
 // Common Indian languages for fallback attempts (ordered by usage)
-const FALLBACK_LANGUAGE_PRIORITY = [
-  'hi-IN', // Hindi - most widely spoken
-  'en-IN', // English
-  'te-IN', // Telugu
-  'ta-IN', // Tamil
-  'mr-IN', // Marathi
-  'gu-IN', // Gujarati
-  'kn-IN', // Kannada
-  'ml-IN', // Malayalam
-  'bn-IN', // Bengali
-  'pa-IN', // Punjabi
-  'od-IN'  // Odia
-];
+// Imported from sarvamConfig.js for centralized configuration
+const FALLBACK_LANGUAGE_PRIORITY = FALLBACK_LANGS;
 
 // Max file size for Sarvam API (10MB limit)
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
@@ -407,69 +406,81 @@ export class SarvamSTTClient {
 export class SarvamRealtimeClient extends EventEmitter {
   constructor(apiKey, options = {}) {
     super();
+    
+    // Load production configuration
+    this.config = getConfig();
+    logger.info(`🚀 Initializing Sarvam STT Client in ${this.config.mode.toUpperCase()} mode`);
+    
+    // Core components
     this.sttClient = new SarvamSTTClient(apiKey, options);
+    this.audioAnalyzer = new AudioQualityAnalyzer(this.config);
+    this.performanceMonitor = new PerformanceMonitor();
+    
+    // Audio buffer management
     this.audioChunks = [];
-    this.chunkSize = options.chunkSize || 4096 * 10; // buffering unit
+    this.chunkSize = options.chunkSize || 4096 * 10;
     this.currentSize = 0;
-    this.language = options.language || 'en-IN'; // Default to English
+    this.language = options.language || 'en-IN';
     this.isActive = false;
-    // Enhanced VAD / filtering configuration - ULTRA-SENSITIVE for quiet audio
-    // Reduced from 80 to 50 to catch quiet/distant speech that was being missed
-    this.minRmsInt16 = parseInt(process.env.MIN_RMS_INT16) || options.minRms || 50; // Ultra-sensitive - catch quiet speech
-    this.maxSilenceChunks = options.maxSilenceChunks || 5; // Very fast flush on silence (instant response)
+    
+    // VAD configuration (from production config)
+    this.minRmsInt16 = this.config.vad.RMS_THRESHOLD;
+    this.maxSilenceChunks = this.config.vad.MAX_SILENCE_FRAMES;
     this.silenceCount = 0;
+    this.hadSpeech = false;
+    
+    // Transcript management
     this.lastTranscript = '';
     this.lastTranscriptTime = 0;
-    this.duplicateWindowMs = options.duplicateWindowMs || 3000; // suppress duplicates within 3s
+    this.duplicateWindowMs = options.duplicateWindowMs || 3000;
     this.genericFillers = options.genericFillers || ['yes', 'yeah', 'ya', 'ok', 'okay', 'hmm', 'uh', 'um'];
-    this.hadSpeech = false;
-  // ULTIMATE ACCURACY: MAXIMUM context for BEST transcription quality
-    // Sarvam AI performs BEST with 5-6 seconds (captures complete sentences with context)
-    // Longer batches = more context = better language detection = accurate transcription
-    this.minFlushBytes = options.minFlushBytes || 160000; // ~5s @ 16kHz (80000 samples) - ULTIMATE accuracy
-    
-    // Batching configuration - ULTIMATE QUALITY MODE
-    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 5000; // 5s batch for MAXIMUM context
+    // Batching configuration (from production config)
+    this.minFlushBytes = this.config.batching.minBytes;
+    this.minBatchDurationMs = this.config.batching.minDuration;
+    this.maxBatchDurationMs = this.config.batching.maxDuration;
+    this.maxBatchBytes = this.config.batching.maxBytes;
     this.batchStartTime = null;
     this.totalDurationMs = 0;
     this._chunkCount = 0;
     this._droppedChunks = 0;
     
-    // Minimum word count to accept transcript (reject short filler responses)
-    this.minWordCount = parseInt(process.env.MIN_WORD_COUNT) || 1; // accept 1+ words - REAL-TIME optimized
+    // Quality gates
+    this.minWordCount = this.config.batching.MIN_WORD_COUNT || 1;
+    this.minSpeechFrames = this.config.batching.MIN_SPEECH_FRAMES || 4;
+    this.speechFrameCount = 0;
     
     this.debugCapture = (process.env.DEBUG_AUDIO_CAPTURE === 'true');
 
-    // Adaptive handling for repeated unknown / low-quality transcripts
-    this.unknownStreak = 0; // consecutive unknown-language short transcripts
-    this.maxUnknownStreak = parseInt(process.env.SARVAM_MAX_UNKNOWN_STREAK) || 2; // Allow 2 attempts before escalation
-    this.fallbackLanguage = process.env.SARVAM_FALLBACK_LANGUAGE || 'hi-IN'; // Hindi fallback
-    this.escalatedDurationMs = parseInt(process.env.SARVAM_ESCALATED_DURATION_MS) || 2000; // 2s escalation for better quality
-    this.escalatedFlushBytes = parseInt(process.env.SARVAM_ESCALATED_FLUSH_BYTES) || 64000; // ~2s @ 16kHz - Better accuracy
-    this.minSpeechFrames = parseInt(process.env.MIN_SPEECH_FRAMES) || 4; // MINIMAL: instant triggering (was 6)
-    this.speechFrameCount = 0; // number of speech chunks in current batch
-    // Multi-language detection settings - ULTIMATE COVERAGE for BEST detection
-    // Testing ALL 11 languages (100% coverage) with sequential processing + retry protection
-    // Maximum languages = best chance of correct detection = highest accuracy possible
-    this.maxLanguagesToTest = parseInt(process.env.MAX_LANGUAGES_TO_TEST) || 11; // Test ALL 11 Indian languages for ULTIMATE accuracy
-    // Hard caps to prevent runaway accumulation - Sarvam API has 30s limit for realtime endpoint
-    // Use 25s to leave margin for processing delays and network latency
-    this.maxBatchDurationMs = parseInt(process.env.MAX_BATCH_DURATION_MS) || 25000; // 25s hard cap (Sarvam limit: 30s)
-    this.maxBatchBytes = parseInt(process.env.MAX_BATCH_BYTES) || (16000 * 2 * 25); // ≈800000 bytes @ 16kHz mono 25s
-    // Translation error tracking / degradation
+    // Adaptive handling
+    this.unknownStreak = 0;
+    this.maxUnknownStreak = 2;
+    this.fallbackLanguage = 'hi-IN';
+    this.escalatedDurationMs = 2000;
+    this.escalatedFlushBytes = 64000;
+    
+    // Language detection configuration (from production config)
+    this.maxLanguagesToTest = this.config.maxLanguages;
+    this.preflightDetect = this.config.preflight.enabled;
+    this.preflightSeconds = this.config.preflight.duration;
+    this.preflightModel = this.config.preflight.model;
+    this.enableTTGuard = this.config.enableTTGuard;
+    this.emptyBreakThreshold = this.config.emptyBreakThreshold;
+    this.lastDetectedLanguage = null;
+    
+    // Translation error tracking
     this.translateErrorCount = 0;
-    this.maxTranslateErrors = parseInt(process.env.MAX_TRANSLATE_ERRORS) || 3;
-    this.degradedTranslate = false; // when true skip translate endpoint
-    this.emptyBatchStreak = 0; // consecutive batches with empty transcripts
-
-    // Preflight language detection and guards
-    this.preflightDetect = process.env.SARVAM_PREFLIGHT_DETECT !== 'false';
-    this.preflightSeconds = parseFloat(process.env.SARVAM_PREFLIGHT_SECONDS || '1.6');
-    this.enableTTGuard = process.env.SARVAM_ENABLE_TT_GUARD !== 'false';
-    this.lastDetectedLanguage = null; // heuristic to prioritize recent language
-
-    // Latency mode: 'accuracy' (default) or 'speed' (reduced language set, looser early-exit for short phrases)
-    this.latencyMode = process.env.SARVAM_LATENCY_MODE || 'accuracy';
+    this.maxTranslateErrors = 3;
+    this.degradedTranslate = false;
+    this.emptyBatchStreak = 0;
+    
+    // Performance monitoring
+    this.latencyMode = this.config.mode;
+    this.batchCount = 0;
+    
+    // Periodic performance reporting (every 50 batches)
+    this.reportInterval = parseInt(process.env.PERF_REPORT_INTERVAL || '50');
+    
+    logger.info(`✓ Configuration loaded: ${this.maxLanguagesToTest} languages, ${this.minBatchDurationMs}ms batches, preflight=${this.preflightDetect}`);
   }
 
   start() {
