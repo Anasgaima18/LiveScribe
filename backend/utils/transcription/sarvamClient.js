@@ -783,23 +783,26 @@ export class SarvamRealtimeClient extends EventEmitter {
                 });
                 
                 // LANGUAGE-SPECIFIC VALIDATION - Check if transcript matches expected language patterns
+                // FIX: Prevent division by zero with length check
                 let languageMatchBonus = 0;
-                if (lang === 'en-IN') {
-                  // English should have mostly ASCII characters
-                  const asciiRatio = (transcript.match(/[a-zA-Z\s]/g) || []).length / transcript.length;
-                  if (asciiRatio > 0.8) languageMatchBonus = 30; // Strong English indicator
-                } else if (lang === 'hi-IN') {
-                  // Hindi should have Devanagari script (Unicode range \u0900-\u097F)
-                  const devanagariRatio = (transcript.match(/[\u0900-\u097F]/g) || []).length / transcript.length;
-                  if (devanagariRatio > 0.5) languageMatchBonus = 30; // Strong Hindi indicator
-                } else if (lang === 'te-IN') {
-                  // Telugu script (Unicode range \u0C00-\u0C7F)
-                  const teluguRatio = (transcript.match(/[\u0C00-\u0C7F]/g) || []).length / transcript.length;
-                  if (teluguRatio > 0.5) languageMatchBonus = 30;
-                } else if (lang === 'ta-IN') {
-                  // Tamil script (Unicode range \u0B80-\u0BFF)
-                  const tamilRatio = (transcript.match(/[\u0B80-\u0BFF]/g) || []).length / transcript.length;
-                  if (tamilRatio > 0.5) languageMatchBonus = 30;
+                if (transcript.length > 0) {
+                  if (lang === 'en-IN') {
+                    // English should have mostly ASCII characters
+                    const asciiRatio = (transcript.match(/[a-zA-Z\s]/g) || []).length / transcript.length;
+                    if (asciiRatio > 0.8) languageMatchBonus = 30; // Strong English indicator
+                  } else if (lang === 'hi-IN') {
+                    // Hindi should have Devanagari script (Unicode range \u0900-\u097F)
+                    const devanagariRatio = (transcript.match(/[\u0900-\u097F]/g) || []).length / transcript.length;
+                    if (devanagariRatio > 0.5) languageMatchBonus = 30; // Strong Hindi indicator
+                  } else if (lang === 'te-IN') {
+                    // Telugu script (Unicode range \u0C00-\u0C7F)
+                    const teluguRatio = (transcript.match(/[\u0C00-\u0C7F]/g) || []).length / transcript.length;
+                    if (teluguRatio > 0.5) languageMatchBonus = 30;
+                  } else if (lang === 'ta-IN') {
+                    // Tamil script (Unicode range \u0B80-\u0BFF)
+                    const tamilRatio = (transcript.match(/[\u0B80-\u0BFF]/g) || []).length / transcript.length;
+                    if (tamilRatio > 0.5) languageMatchBonus = 30;
+                  }
                 }
                 qualityScore += languageMatchBonus;
                 
@@ -825,6 +828,8 @@ export class SarvamRealtimeClient extends EventEmitter {
                     const words = transcript.split(/\s+/).filter(w => w.length > 0);
                     const wordCount = words.length;
                     const charCount = transcript.length;
+                    // FIX: Add avgWordLength calculation for consistency
+                    const avgWordLength = wordCount > 0 ? charCount / wordCount : 0;
                     const qualityScore = (wordCount * 10) + (charCount * 0.3) + (transcript.length > 0 ? 20 : 0);
                     
                     allResults.push({
@@ -832,6 +837,7 @@ export class SarvamRealtimeClient extends EventEmitter {
                       transcript: transcript,
                       wordCount: wordCount,
                       charCount: charCount,
+                      avgWordLength: avgWordLength,
                       qualityScore: qualityScore
                     });
                   } catch (retryErr) {
@@ -846,6 +852,8 @@ export class SarvamRealtimeClient extends EventEmitter {
                   language: lang,
                   transcript: '',
                   wordCount: 0,
+                  charCount: 0,
+                  avgWordLength: 0,
                   qualityScore: 0
                 });
               }
