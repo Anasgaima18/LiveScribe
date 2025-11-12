@@ -1,80 +1,96 @@
 import logger from '../config/logger.js';
+import axios from 'axios';
 
 /**
- * Translation Service using Google Translate API
- * Supports real-time translation for transcripts and UI
+ * Translation Service using Sarvam AI API
+ * Supports real-time translation for transcripts between Indian languages and English
+ * API Documentation: https://docs.sarvam.ai/api-reference-docs/endpoints/translate
  */
 
-// Supported languages
+// Supported languages by Sarvam AI
 export const SUPPORTED_LANGUAGES = {
-  en: 'English',
-  es: 'Spanish',
-  fr: 'French',
-  de: 'German',
-  zh: 'Chinese (Simplified)',
-  ja: 'Japanese',
-  ko: 'Korean',
-  ar: 'Arabic',
-  hi: 'Hindi',
-  pt: 'Portuguese',
-  ru: 'Russian',
-  it: 'Italian',
-  tr: 'Turkish',
-  nl: 'Dutch',
-  pl: 'Polish'
+  'en-IN': 'English (India)',
+  'hi-IN': 'Hindi',
+  'bn-IN': 'Bengali',
+  'kn-IN': 'Kannada',
+  'ml-IN': 'Malayalam',
+  'mr-IN': 'Marathi',
+  'od-IN': 'Odia',
+  'pa-IN': 'Punjabi',
+  'ta-IN': 'Tamil',
+  'te-IN': 'Telugu',
+  'gu-IN': 'Gujarati'
 };
 
+// Common Indian languages for auto-detection
+const LANGUAGE_PATTERNS = {
+  'hi-IN': /[\u0900-\u097F]/, // Devanagari (Hindi, Marathi)
+  'bn-IN': /[\u0980-\u09FF]/, // Bengali
+  'gu-IN': /[\u0A80-\u0AFF]/, // Gujarati
+  'pa-IN': /[\u0A00-\u0A7F]/, // Gurmukhi (Punjabi)
+  'ta-IN': /[\u0B80-\u0BFF]/, // Tamil
+  'te-IN': /[\u0C00-\u0C7F]/, // Telugu
+  'kn-IN': /[\u0C80-\u0CFF]/, // Kannada
+  'ml-IN': /[\u0D00-\u0D7F]/, // Malayalam
+  'od-IN': /[\u0B00-\u0B7F]/, // Odia
+};
+
+const SARVAM_API_KEY = process.env.SARVAM_API_KEY;
+const SARVAM_BASE_URL = 'https://api.sarvam.ai';
+
 /**
- * Detect language of text
+ * Detect language of text using script patterns
  * @param {string} text - Text to detect language
  * @returns {Promise<string>} - Detected language code
  */
 export const detectLanguage = async (text) => {
   try {
-    // Using a simple heuristic approach for demo
-    // In production, use Google Cloud Translation API
-    
-    // Check for common patterns
-    const patterns = {
-      ar: /[\u0600-\u06FF]/,
-      zh: /[\u4E00-\u9FFF]/,
-      ja: /[\u3040-\u309F\u30A0-\u30FF]/,
-      ko: /[\uAC00-\uD7AF]/,
-      ru: /[\u0400-\u04FF]/,
-      hi: /[\u0900-\u097F]/
-    };
+    if (!text || text.trim().length === 0) {
+      return 'en-IN';
+    }
 
-    for (const [lang, pattern] of Object.entries(patterns)) {
+    // Check for Indian language scripts
+    for (const [lang, pattern] of Object.entries(LANGUAGE_PATTERNS)) {
       if (pattern.test(text)) {
+        logger.debug(`Detected language: ${lang} from script pattern`);
         return lang;
       }
     }
 
     // Default to English for Latin characters
-    return 'en';
+    logger.debug('Defaulting to English (en-IN) - no Indian script detected');
+    return 'en-IN';
   } catch (error) {
     logger.error('Language detection error:', error);
-    return 'en'; // Default to English
+    return 'en-IN'; // Default to English
   }
 };
 
 /**
- * Translate text to target language
+ * Translate text using Sarvam AI Translation API
  * @param {string} text - Text to translate
- * @param {string} targetLang - Target language code
- * @param {string} sourceLang - Source language code (optional)
+ * @param {string} targetLang - Target language code (e.g., 'en-IN', 'hi-IN')
+ * @param {string} sourceLang - Source language code (optional, will auto-detect)
  * @returns {Promise<object>} - Translation result
  */
 export const translateText = async (text, targetLang, sourceLang = null) => {
   try {
-    // Check if Google Translate API key is configured
-    const apiKey = process.env.GOOGLE_TRANSLATE_API_KEY;
-    
-    if (!apiKey) {
-      logger.warn('Google Translate API key not configured');
+    if (!text || text.trim().length === 0) {
       return {
         translatedText: text,
-        detectedLanguage: sourceLang || 'en',
+        detectedLanguage: sourceLang || 'en-IN',
+        targetLanguage: targetLang,
+        isTranslated: false,
+        message: 'Empty text provided'
+      };
+    }
+
+    // Check if Sarvam API key is configured
+    if (!SARVAM_API_KEY) {
+      logger.warn('Sarvam AI API key not configured');
+      return {
+        translatedText: text,
+        detectedLanguage: sourceLang || 'en-IN',
         targetLanguage: targetLang,
         isTranslated: false,
         message: 'Translation service not configured'
@@ -84,6 +100,7 @@ export const translateText = async (text, targetLang, sourceLang = null) => {
     // Auto-detect source language if not provided
     if (!sourceLang) {
       sourceLang = await detectLanguage(text);
+      logger.debug(`Auto-detected source language: ${sourceLang}`);
     }
 
     // If source and target are the same, no translation needed
@@ -96,43 +113,57 @@ export const translateText = async (text, targetLang, sourceLang = null) => {
       };
     }
 
-    // Call Google Cloud Translation API
-    const url = `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`;
+    // Call Sarvam AI Translation API
+    logger.info(`Translating text from ${sourceLang} to ${targetLang}: "${text.substring(0, 50)}..."`);
     
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const response = await axios.post(
+      `${SARVAM_BASE_URL}/translate`,
+      {
+        input: text,
+        source_language_code: sourceLang,
+        target_language_code: targetLang,
+        speaker_gender: 'Female', // Optional: can be parameterized
+        mode: 'formal', // Optional: 'formal' or 'casual'
+        model: 'mayura:v1',
+        enable_preprocessing: false
       },
-      body: JSON.stringify({
-        q: text,
-        target: targetLang,
-        source: sourceLang,
-        format: 'text'
-      })
-    });
+      {
+        headers: {
+          'api-subscription-key': SARVAM_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000 // 10 second timeout
+      }
+    );
 
-    const data = await response.json();
+    const translatedText = response.data.translated_text || response.data.output;
 
-    if (data.error) {
-      throw new Error(data.error.message);
+    if (!translatedText) {
+      throw new Error('No translation returned from Sarvam API');
     }
 
+    logger.info(`Translation successful: "${translatedText.substring(0, 50)}..."`);
+
     return {
-      translatedText: data.data.translations[0].translatedText,
-      detectedLanguage: data.data.translations[0].detectedSourceLanguage || sourceLang,
+      translatedText: translatedText,
+      detectedLanguage: sourceLang,
       targetLanguage: targetLang,
       isTranslated: true,
-      confidence: 1.0
+      confidence: 1.0,
+      provider: 'sarvam'
     };
 
   } catch (error) {
-    logger.error('Translation error:', error);
+    logger.error('Sarvam translation error:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
     
     // Fallback: return original text
     return {
       translatedText: text,
-      detectedLanguage: sourceLang || 'en',
+      detectedLanguage: sourceLang || 'en-IN',
       targetLanguage: targetLang,
       isTranslated: false,
       error: error.message
@@ -142,49 +173,67 @@ export const translateText = async (text, targetLang, sourceLang = null) => {
 
 /**
  * Translate multiple segments (batch translation)
+ * Note: Sarvam AI doesn't have a native batch endpoint, so we translate sequentially
  * @param {Array} segments - Array of text segments
  * @param {string} targetLang - Target language code
+ * @param {string} sourceLang - Source language code (optional)
  * @returns {Promise<Array>} - Array of translation results
  */
-export const translateBatch = async (segments, targetLang) => {
+export const translateBatch = async (segments, targetLang, sourceLang = null) => {
   try {
-    const apiKey = process.env.GOOGLE_TRANSLATE_API_KEY;
-    
-    if (!apiKey) {
+    if (!SARVAM_API_KEY) {
       return segments.map(text => ({
         originalText: text,
         translatedText: text,
-        isTranslated: false
+        isTranslated: false,
+        message: 'Translation service not configured'
       }));
     }
 
-    // Batch translate (Google API supports up to 128 text segments)
-    const url = `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`;
+    logger.info(`Batch translating ${segments.length} segments to ${targetLang}`);
+
+    // Translate each segment sequentially
+    // In production, consider implementing proper rate limiting and concurrency control
+    const results = [];
     
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        q: segments,
-        target: targetLang,
-        format: 'text'
-      })
-    });
+    for (let i = 0; i < segments.length; i++) {
+      const text = segments[i];
+      
+      if (!text || text.trim().length === 0) {
+        results.push({
+          originalText: text,
+          translatedText: text,
+          isTranslated: false
+        });
+        continue;
+      }
 
-    const data = await response.json();
-
-    if (data.error) {
-      throw new Error(data.error.message);
+      try {
+        const result = await translateText(text, targetLang, sourceLang);
+        results.push({
+          originalText: text,
+          translatedText: result.translatedText,
+          detectedLanguage: result.detectedLanguage,
+          isTranslated: result.isTranslated
+        });
+        
+        // Small delay to avoid rate limiting (adjust based on your API tier)
+        if (i < segments.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      } catch (error) {
+        logger.error(`Error translating segment ${i}:`, error);
+        results.push({
+          originalText: text,
+          translatedText: text,
+          isTranslated: false,
+          error: error.message
+        });
+      }
     }
 
-    return segments.map((originalText, index) => ({
-      originalText,
-      translatedText: data.data.translations[index].translatedText,
-      detectedLanguage: data.data.translations[index].detectedSourceLanguage,
-      isTranslated: true
-    }));
+    logger.info(`Batch translation complete: ${results.filter(r => r.isTranslated).length}/${segments.length} successful`);
+    return results;
 
   } catch (error) {
     logger.error('Batch translation error:', error);
