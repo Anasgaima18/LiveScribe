@@ -371,10 +371,10 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.duplicateWindowMs = options.duplicateWindowMs || 3000; // suppress duplicates within 3s
     this.genericFillers = options.genericFillers || ['yes', 'yeah', 'ya', 'ok', 'okay', 'hmm', 'uh', 'um'];
     this.hadSpeech = false;
-  this.minFlushBytes = options.minFlushBytes || 48000; // ~1.5s @ 16kHz (24000 samples) - REAL-TIME optimized
+  this.minFlushBytes = options.minFlushBytes || 56000; // ~1.75s @ 16kHz (28000 samples) - Balanced for multi-language
     
-    // Batching configuration - ULTRA-LOW LATENCY for real-time feel
-    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 1200; // min 1.2s batch for instant response
+    // Batching configuration - REAL-TIME with ALL LANGUAGES
+    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 1500; // min 1.5s batch for multi-language processing
     this.batchStartTime = null;
     this.totalDurationMs = 0;
     this._chunkCount = 0;
@@ -387,14 +387,14 @@ export class SarvamRealtimeClient extends EventEmitter {
 
     // Adaptive handling for repeated unknown / low-quality transcripts
     this.unknownStreak = 0; // consecutive unknown-language short transcripts
-    this.maxUnknownStreak = parseInt(process.env.SARVAM_MAX_UNKNOWN_STREAK) || 1; // Instant fallback for real-time
+    this.maxUnknownStreak = parseInt(process.env.SARVAM_MAX_UNKNOWN_STREAK) || 2; // Allow 2 attempts before escalation
     this.fallbackLanguage = process.env.SARVAM_FALLBACK_LANGUAGE || 'hi-IN'; // Hindi fallback
-    this.escalatedDurationMs = parseInt(process.env.SARVAM_ESCALATED_DURATION_MS) || 1500; // Ultra-fast escalation (1.5s)
-    this.escalatedFlushBytes = parseInt(process.env.SARVAM_ESCALATED_FLUSH_BYTES) || 48000; // ~1.5s @ 16kHz - REAL-TIME
+    this.escalatedDurationMs = parseInt(process.env.SARVAM_ESCALATED_DURATION_MS) || 2000; // 2s escalation for better quality
+    this.escalatedFlushBytes = parseInt(process.env.SARVAM_ESCALATED_FLUSH_BYTES) || 64000; // ~2s @ 16kHz - Better accuracy
     this.minSpeechFrames = parseInt(process.env.MIN_SPEECH_FRAMES) || 4; // MINIMAL: instant triggering (was 6)
     this.speechFrameCount = 0; // number of speech chunks in current batch
-    // Multi-language detection settings - REAL-TIME (test only 2 most common languages)
-    this.maxLanguagesToTest = parseInt(process.env.MAX_LANGUAGES_TO_TEST) || 2; // Test only 2 languages for instant response (Hindi + English)
+    // Multi-language detection settings - ALL LANGUAGES for comprehensive support
+    this.maxLanguagesToTest = parseInt(process.env.MAX_LANGUAGES_TO_TEST) || 11; // Test all 11 Indian languages for maximum coverage
     // Hard caps to prevent runaway accumulation - Sarvam API has 30s limit for realtime endpoint
     // Use 25s to leave margin for processing delays and network latency
     this.maxBatchDurationMs = parseInt(process.env.MAX_BATCH_DURATION_MS) || 25000; // 25s hard cap (Sarvam limit: 30s)
