@@ -403,8 +403,9 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.currentSize = 0;
     this.language = options.language || 'en-IN'; // Default to English
     this.isActive = false;
-    // Enhanced VAD / filtering configuration - ULTRA-SENSITIVE for real-time
-    this.minRmsInt16 = parseInt(process.env.MIN_RMS_INT16) || options.minRms || 80; // Very sensitive - catch all speech
+    // Enhanced VAD / filtering configuration - ULTRA-SENSITIVE for quiet audio
+    // Reduced from 80 to 50 to catch quiet/distant speech that was being missed
+    this.minRmsInt16 = parseInt(process.env.MIN_RMS_INT16) || options.minRms || 50; // Ultra-sensitive - catch quiet speech
     this.maxSilenceChunks = options.maxSilenceChunks || 5; // Very fast flush on silence (instant response)
     this.silenceCount = 0;
     this.lastTranscript = '';
@@ -412,10 +413,13 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.duplicateWindowMs = options.duplicateWindowMs || 3000; // suppress duplicates within 3s
     this.genericFillers = options.genericFillers || ['yes', 'yeah', 'ya', 'ok', 'okay', 'hmm', 'uh', 'um'];
     this.hadSpeech = false;
-  this.minFlushBytes = options.minFlushBytes || 64000; // ~2s @ 16kHz (32000 samples) - Balanced for sequential API calls
+  // CRITICAL FIX: Increased batch size for better Sarvam transcription quality
+    // Sarvam API works best with 2-5 seconds of continuous audio
+    // Too short = empty transcripts, too long = high latency
+    this.minFlushBytes = options.minFlushBytes || 96000; // ~3s @ 16kHz (48000 samples) - Optimal for Sarvam
     
-    // Batching configuration - REAL-TIME with rate limit protection
-    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 2000; // min 2s batch allows sequential language testing
+    // Batching configuration - BALANCED for quality and latency
+    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 3000; // min 3s batch for better transcription accuracy
     this.batchStartTime = null;
     this.totalDurationMs = 0;
     this._chunkCount = 0;
@@ -596,7 +600,7 @@ export class SarvamRealtimeClient extends EventEmitter {
 
       logger.info(`[Batch ${batchId}] Processing ${audioBuffer.length} bytes for transcription (${this.audioChunks.length} chunks, ${this.totalDurationMs.toFixed(0)}ms)`);
 
-      // Aggregate RMS gate
+      // Aggregate RMS gate - RELAXED threshold for quiet audio
       const samples = new Int16Array(audioBuffer.buffer, audioBuffer.byteOffset, audioBuffer.length / 2);
       if (samples.length > 0) {
         let sum = 0, peak = 0;
@@ -606,19 +610,21 @@ export class SarvamRealtimeClient extends EventEmitter {
           if (v > peak) peak = v;
         }
         const aggRms = Math.sqrt(sum / samples.length);
-        if (aggRms < this.minRmsInt16) {
-          logger.debug(`Skipping STT call: aggregate RMS ${aggRms.toFixed(0)} below ${this.minRmsInt16}`);
+        // CRITICAL FIX: Lower threshold from 80 to 30 to process quiet audio
+        // The normalization step will amplify it to acceptable levels
+        const effectiveMinRms = Math.min(this.minRmsInt16, 30);
+        if (aggRms < effectiveMinRms) {
+          logger.debug(`Skipping STT call: aggregate RMS ${aggRms.toFixed(0)} below ${effectiveMinRms} (very quiet)`);
           this.processing = false;
           this.hadSpeech = false;
           // keep buffer for potential accumulation (do not clear)
           return;
+        } else if (aggRms < 200) {
+          logger.info(`[Batch ${batchId}] Low volume detected (RMS: ${aggRms.toFixed(0)}), will apply amplification`);
         }
       }
 
-      const wavBuffer = this._pcm16ToWav(audioBuffer, 16000, 1);
-      logger.debug(`[Batch ${batchId}] Converted to WAV: ${wavBuffer.length} bytes from ${audioBuffer.length} bytes PCM`);
-      
-      // Calculate audio quality metrics
+      // Calculate audio quality metrics BEFORE normalization
       const qualitySamples = new Int16Array(audioBuffer.buffer, audioBuffer.byteOffset, audioBuffer.length / 2);
       let sum = 0, peak = 0, nonZero = 0;
       for (let i = 0; i < qualitySamples.length; i++) {
@@ -630,7 +636,48 @@ export class SarvamRealtimeClient extends EventEmitter {
       const rms = Math.sqrt(sum / qualitySamples.length);
       const rmsDb = 20 * Math.log10(rms / 32768);
       const nonZeroPercent = ((nonZero / qualitySamples.length) * 100).toFixed(1);
-      logger.info(`[Batch ${batchId}] Audio quality - RMS: ${rms.toFixed(0)} (${rmsDb.toFixed(1)} dB), Peak: ${peak}, Non-zero: ${nonZeroPercent}%, Samples: ${qualitySamples.length}`);
+      logger.info(`[Batch ${batchId}] Audio quality (original) - RMS: ${rms.toFixed(0)} (${rmsDb.toFixed(1)} dB), Peak: ${peak}, Non-zero: ${nonZeroPercent}%, Samples: ${qualitySamples.length}`);
+      
+      // CRITICAL FIX: Audio normalization for low-volume audio
+      // Sarvam API requires minimum -25dB for good transcription
+      // Current audio is too quiet (-39 to -43 dB), causing empty transcripts
+      let normalizedBuffer = audioBuffer;
+      const targetRMS = 8000; // Target RMS ~-12dB for optimal Sarvam performance
+      const minRMSForNormalization = 500; // Normalize if below -36dB
+      
+      if (rms < minRMSForNormalization && rms > 0) {
+        const amplificationFactor = targetRMS / rms;
+        const maxAmplification = 8.0; // Prevent excessive noise amplification
+        const actualAmplification = Math.min(amplificationFactor, maxAmplification);
+        
+        logger.info(`[Batch ${batchId}] Audio too quiet (${rmsDb.toFixed(1)} dB), applying ${actualAmplification.toFixed(2)}x amplification`);
+        
+        // Create normalized buffer
+        const normalizedSamples = new Int16Array(qualitySamples.length);
+        for (let i = 0; i < qualitySamples.length; i++) {
+          const amplified = qualitySamples[i] * actualAmplification;
+          // Clamp to Int16 range to prevent clipping
+          normalizedSamples[i] = Math.max(-32768, Math.min(32767, amplified));
+        }
+        
+        normalizedBuffer = Buffer.from(normalizedSamples.buffer);
+        
+        // Calculate normalized audio metrics
+        let normalizedSum = 0, normalizedPeak = 0;
+        for (let i = 0; i < normalizedSamples.length; i++) {
+          const v = Math.abs(normalizedSamples[i]);
+          normalizedSum += v * v;
+          if (v > normalizedPeak) normalizedPeak = v;
+        }
+        const normalizedRms = Math.sqrt(normalizedSum / normalizedSamples.length);
+        const normalizedRmsDb = 20 * Math.log10(normalizedRms / 32768);
+        logger.info(`[Batch ${batchId}] Audio quality (normalized) - RMS: ${normalizedRms.toFixed(0)} (${normalizedRmsDb.toFixed(1)} dB), Peak: ${normalizedPeak}`);
+      } else {
+        logger.debug(`[Batch ${batchId}] Audio quality sufficient, no normalization needed`);
+      }
+      
+      const wavBuffer = this._pcm16ToWav(normalizedBuffer, 16000, 1);
+      logger.debug(`[Batch ${batchId}] Converted to WAV: ${wavBuffer.length} bytes from ${normalizedBuffer.length} bytes PCM`);
 
       if (process.env.SARVAM_DEBUG_DUMP_WAV === 'true') {
         try {
@@ -1036,32 +1083,67 @@ export class SarvamRealtimeClient extends EventEmitter {
   }
 
   /**
-   * Convert raw PCM16 to WAV format
+   * Convert raw PCM16 to WAV format with proper validation
+   * Sarvam API requires: 16kHz, mono, 16-bit PCM, WAV format
    */
   _pcm16ToWav(pcm16Buffer, sampleRate, channels) {
+    // Validate input
+    if (!Buffer.isBuffer(pcm16Buffer)) {
+      throw new Error('PCM buffer must be a Buffer');
+    }
+    if (pcm16Buffer.length === 0) {
+      throw new Error('PCM buffer is empty');
+    }
+    if (pcm16Buffer.length % 2 !== 0) {
+      logger.warn(`PCM buffer length ${pcm16Buffer.length} is odd, truncating last byte`);
+      pcm16Buffer = pcm16Buffer.slice(0, pcm16Buffer.length - 1);
+    }
+    
+    // Validate audio parameters (Sarvam requirements)
+    if (sampleRate !== 16000) {
+      logger.warn(`Sample rate ${sampleRate} Hz is not 16000 Hz (Sarvam optimal)`);
+    }
+    if (channels !== 1) {
+      logger.warn(`Channel count ${channels} is not mono (Sarvam requirement)`);
+    }
+    
     const dataLength = pcm16Buffer.length;
     const wavHeader = Buffer.alloc(44);
 
-    // RIFF header
+    // RIFF header (bytes 0-11)
     wavHeader.write('RIFF', 0);
-    wavHeader.writeUInt32LE(36 + dataLength, 4);
+    wavHeader.writeUInt32LE(36 + dataLength, 4); // File size - 8
     wavHeader.write('WAVE', 8);
     
-    // fmt chunk
+    // fmt chunk (bytes 12-35)
     wavHeader.write('fmt ', 12);
-    wavHeader.writeUInt32LE(16, 16); // Chunk size
-    wavHeader.writeUInt16LE(1, 20);  // Audio format (PCM)
-    wavHeader.writeUInt16LE(channels, 22);
-    wavHeader.writeUInt32LE(sampleRate, 24);
-    wavHeader.writeUInt32LE(sampleRate * channels * 2, 28); // Byte rate
-    wavHeader.writeUInt16LE(channels * 2, 32); // Block align
+    wavHeader.writeUInt32LE(16, 16); // Chunk size (16 for PCM)
+    wavHeader.writeUInt16LE(1, 20);  // Audio format (1 = PCM)
+    wavHeader.writeUInt16LE(channels, 22); // Number of channels
+    wavHeader.writeUInt32LE(sampleRate, 24); // Sample rate
+    wavHeader.writeUInt32LE(sampleRate * channels * 2, 28); // Byte rate (sr * ch * bytes/sample)
+    wavHeader.writeUInt16LE(channels * 2, 32); // Block align (ch * bytes/sample)
     wavHeader.writeUInt16LE(16, 34); // Bits per sample
     
-    // data chunk
+    // data chunk (bytes 36-43)
     wavHeader.write('data', 36);
     wavHeader.writeUInt32LE(dataLength, 40);
 
-    return Buffer.concat([wavHeader, pcm16Buffer]);
+    const wavBuffer = Buffer.concat([wavHeader, pcm16Buffer]);
+    
+    // Validate WAV output
+    const durationSec = dataLength / (sampleRate * channels * 2);
+    logger.debug(`WAV created: ${wavBuffer.length} bytes, ${durationSec.toFixed(2)}s, ${sampleRate}Hz, ${channels}ch`);
+    
+    // Validate minimum duration (Sarvam works best with 1-30s audio)
+    if (durationSec < 0.5) {
+      logger.warn(`Audio duration ${durationSec.toFixed(2)}s is very short, may not transcribe well`);
+    }
+    if (durationSec > 30) {
+      logger.warn(`Audio duration ${durationSec.toFixed(2)}s exceeds 30s, may hit Sarvam API limits`);
+    }
+    
+    return wavBuffer;
   }
 }
 
