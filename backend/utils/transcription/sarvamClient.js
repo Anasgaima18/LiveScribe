@@ -687,40 +687,46 @@ export class SarvamRealtimeClient extends EventEmitter {
             logger.info(`[Batch ${batchId}] Best match: ${detectedLang} (quality: ${bestResult.qualityScore.toFixed(0)}, words: ${bestResult.wordCount})`);
             logger.info(`[Batch ${batchId}] Detected text: "${originalText}"`);
             
-            // If not English and dual-mode enabled, translate to English
-            if (dualMode && detectedLang !== 'en-IN' && originalText && originalText.trim().length > 0) {
+            // ALWAYS translate non-English to English (not just dual-mode)
+            // This ensures every language gets English translation automatically
+            if (detectedLang !== 'en-IN' && originalText && originalText.trim().length > 0) {
               try {
                 // Use Sarvam's text translation API for accurate translation
-                logger.info(`[Batch ${batchId}] Translating ${detectedLang} text to English`);
+                logger.info(`[Batch ${batchId}] Auto-translating ${detectedLang} to English`);
                 const { translateText } = await import('../translationService.js');
                 translatedText = await translateText(originalText, detectedLang, 'en-IN');
-                logger.info(`[Batch ${batchId}] Translation: "${translatedText}"`);
+                logger.info(`[Batch ${batchId}] English translation: "${translatedText}"`);
                 
-                // Check similarity to avoid showing same text twice (code-mixed or English words)
-                if (translatedText && originalText) {
+                // Validate translation quality
+                if (!translatedText || translatedText.trim().length === 0) {
+                  logger.warn(`[Batch ${batchId}] Translation returned empty - using original text`);
+                  translatedText = originalText; // Fallback to original if translation fails
+                } else {
+                  // Check similarity to detect English input or code-mixing
                   const similarity = this._calculateSimilarity(originalText.toLowerCase(), translatedText.toLowerCase());
                   if (similarity > 0.8) {
-                    logger.info(`[Batch ${batchId}] Texts are ${(similarity * 100).toFixed(0)}% similar - likely English/code-mixed, using English only`);
-                    translatedText = null;
-                    originalText = translatedText || originalText; // Use translated version
+                    logger.info(`[Batch ${batchId}] Texts are ${(similarity * 100).toFixed(0)}% similar - likely English input`);
+                    // Still keep both for dual-mode display, but mark as English
                     detectedLang = 'en-IN';
                   } else {
-                    logger.info(`[Batch ${batchId}] Dual-mode activated: original differs from translation (similarity: ${(similarity * 100).toFixed(0)}%)`);
+                    logger.info(`[Batch ${batchId}] Translation differs from original (similarity: ${(similarity * 100).toFixed(0)}%)`);
                   }
                 }
               } catch (transError) {
-                logger.warn(`[Batch ${batchId}] Translation failed: ${transError.message}`);
-                // Continue with just original text
-                translatedText = null;
+                logger.error(`[Batch ${batchId}] Translation failed: ${transError.message}`);
+                // Fallback: use original text as both original and translated
+                translatedText = originalText;
+                logger.warn(`[Batch ${batchId}] Using original text as fallback`);
               }
             } else if (detectedLang === 'en-IN') {
-              logger.info(`[Batch ${batchId}] Detected English - no translation needed`);
-              translatedText = null; // No translation needed for English
+              logger.info(`[Batch ${batchId}] Detected English - using as-is`);
+              translatedText = originalText; // For English, both are the same
             }
             
-            // Use the best transcription result
+            // Use English translation as primary transcript (what user sees)
+            // Keep original in native script for dual-mode display
             result = {
-              transcript: translatedText || originalText, // Use translation if available, else original
+              transcript: translatedText || originalText, // Always use English version
               language: detectedLang,
               timestamp: Date.now()
             };
@@ -753,9 +759,13 @@ export class SarvamRealtimeClient extends EventEmitter {
       }
 
       logger.info(`Transcription result: "${result.transcript}" (language: ${result.language})`);
-      if (dualMode && originalText && translatedText) {
-        logger.info(`Dual-mode transcripts - Original: "${originalText}", Translated: "${translatedText}"`);
-      };
+      
+      // Always log dual-mode transcripts when available
+      if (originalText && translatedText && originalText !== translatedText) {
+        logger.info(`Dual-mode transcripts - Original (${result.language}): "${originalText}", English: "${translatedText}"`);
+      } else if (originalText) {
+        logger.info(`Single-language transcript (${result.language}): "${originalText}"`);
+      }
 
       const text = (result.transcript || '').trim();
       if (!text) {
@@ -828,11 +838,16 @@ export class SarvamRealtimeClient extends EventEmitter {
         autoDetected: this.language === 'auto'
       };
       
-      // Add dual-mode fields if available
-      if (originalText && translatedText) {
+      // ALWAYS add dual-mode fields when original and translated differ
+      // This ensures UI shows both native script + English translation
+      if (originalText && translatedText && originalText.trim() !== translatedText.trim()) {
         eventData.originalText = originalText.trim();
         eventData.translatedText = translatedText.trim();
         eventData.dualMode = true;
+        logger.info(`Emitting dual-mode transcript: original="${originalText.substring(0, 30)}...", translated="${translatedText.substring(0, 30)}..."`);
+      } else if (originalText) {
+        // Same text or English-only, send as single mode
+        logger.info(`Emitting single-mode transcript: "${originalText.substring(0, 50)}..."`);
       }
       
       this.emit('final', eventData);
