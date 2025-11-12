@@ -173,6 +173,8 @@ export class SarvamSTTClient {
       
       form.append('language_code', languageCode);
       form.append('model', options.model || this.model);
+      // Enable Sarvam server-side preprocessing for best accuracy (noise suppression, normalization)
+      form.append('enable_preprocessing', String(options.enablePreprocessing !== undefined ? options.enablePreprocessing : this.enablePreprocessing));
       if (options.inputAudioCodec) {
         form.append('input_audio_codec', options.inputAudioCodec);
       }
@@ -450,6 +452,7 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.translateErrorCount = 0;
     this.maxTranslateErrors = parseInt(process.env.MAX_TRANSLATE_ERRORS) || 3;
     this.degradedTranslate = false; // when true skip translate endpoint
+    this.emptyBatchStreak = 0; // consecutive batches with empty transcripts
   }
 
   start() {
@@ -672,6 +675,18 @@ export class SarvamRealtimeClient extends EventEmitter {
         const normalizedRms = Math.sqrt(normalizedSum / normalizedSamples.length);
         const normalizedRmsDb = 20 * Math.log10(normalizedRms / 32768);
         logger.info(`[Batch ${batchId}] Audio quality (normalized) - RMS: ${normalizedRms.toFixed(0)} (${normalizedRmsDb.toFixed(1)} dB), Peak: ${normalizedPeak}`);
+
+        // If still too quiet after normalization (< -22dB), apply gentle second pass up to 1.5x
+        if (normalizedRms < 3000) {
+          const secondPassFactor = Math.min(1.5, 3000 / Math.max(1, normalizedRms));
+          logger.info(`[Batch ${batchId}] Second-pass normalization x${secondPassFactor.toFixed(2)} to reach -22 dB`);
+          const secondSamples = new Int16Array(normalizedSamples.length);
+          for (let i = 0; i < normalizedSamples.length; i++) {
+            const amplified = normalizedSamples[i] * secondPassFactor;
+            secondSamples[i] = Math.max(-32768, Math.min(32767, amplified));
+          }
+          normalizedBuffer = Buffer.from(secondSamples.buffer);
+        }
       } else {
         logger.debug(`[Batch ${batchId}] Audio quality sufficient, no normalization needed`);
       }
@@ -903,11 +918,14 @@ export class SarvamRealtimeClient extends EventEmitter {
             validResults.sort((a, b) => b.qualityScore - a.qualityScore);
             
             if (validResults.length === 0) {
-              // FIX: Log detailed diagnostics before throwing
-              logger.error(`[Batch ${batchId}] ALL ${allResults.length} languages returned empty transcripts`);
-              logger.error(`[Batch ${batchId}] Audio stats: RMS=${rms.toFixed(0)} (${rmsDb.toFixed(1)}dB), Peak=${peak}, Duration=${(audioBuffer.length/32000).toFixed(2)}s`);
-              logger.error(`[Batch ${batchId}] This indicates: 1) Audio is silence/noise, 2) Wrong audio format, or 3) Sarvam API issue`);
-              throw new Error('All language detection attempts returned empty transcripts - possible silence or audio format issue');
+              // No usable transcript yet; accumulate more audio and retry next flush
+              this.emptyBatchStreak++;
+              const backoffMs = Math.min(1500, 300 * this.emptyBatchStreak);
+              logger.warn(`[Batch ${batchId}] All ${allResults.length} languages empty. Backing off ${backoffMs}ms and accumulating more audio (streak=${this.emptyBatchStreak})`);
+              this.deferRetry = Date.now() + backoffMs;
+              this.processing = false;
+              // Do NOT clear buffers; keep accumulating for more context
+              return;
             }
             
             // Pick the best result
@@ -993,12 +1011,30 @@ export class SarvamRealtimeClient extends EventEmitter {
             }
             
             if (!fallbackSuccess) {
-              logger.error(`[Batch ${batchId}] ALL fallback attempts failed - audio may be silence or corrupted`);
-              if (this.translateErrorCount >= this.maxTranslateErrors) {
-                this.degradedTranslate = true;
-                logger.warn('Max translate errors reached; degrading translation mode');
+              // Last-ditch attempt: try Sarvam transcribe+translate (auto) which sometimes succeeds when STT fails
+              try {
+                logger.warn(`[Batch ${batchId}] Attempting transcribe+translate(auto) as last resort`);
+                const auto = await this.sttClient.transcribeAndTranslate(wavBuffer, { model: 'saaras:v2.5' });
+                const autoText = (auto.transcript || '').trim();
+                if (autoText.length > 0) {
+                  result = { transcript: autoText, language: auto.detectedLanguage || 'unknown', timestamp: Date.now() };
+                  originalText = autoText;
+                  translatedText = autoText;
+                  fallbackSuccess = true;
+                  logger.info(`[Batch ${batchId}] transcribe+translate(auto) succeeded`);
+                }
+              } catch (autoErr) {
+                logger.warn(`[Batch ${batchId}] transcribe+translate(auto) failed: ${autoErr.message}`);
               }
-              throw new Error('All transcription attempts failed including fallbacks - possible silence or audio corruption');
+
+              if (!fallbackSuccess) {
+                logger.error(`[Batch ${batchId}] ALL fallback attempts failed - audio may be silence or corrupted`);
+                if (this.translateErrorCount >= this.maxTranslateErrors) {
+                  this.degradedTranslate = true;
+                  logger.warn('Max translate errors reached; degrading translation mode');
+                }
+                throw new Error('All transcription attempts failed including fallbacks - possible silence or audio corruption');
+              }
             }
           }
         }
