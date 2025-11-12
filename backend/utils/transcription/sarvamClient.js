@@ -166,7 +166,12 @@ export class SarvamSTTClient {
       });
 
       // Language code (hi-IN, en-IN, etc.) and model per Sarvam API (multipart fields)
-      const languageCode = this._validateLanguage(options.language || this.language);
+      let languageCode = this._validateLanguage(options.language || this.language);
+      // Sarvam /speech-to-text does NOT support 'auto' language_code; normalize to en-IN
+      if (languageCode === 'auto') {
+        logger.warn('language_code "auto" is not supported by /speech-to-text; falling back to en-IN');
+        languageCode = 'en-IN';
+      }
       
       // Log request details
       logger.info(`Sarvam transcribe request: size=${audioBuffer.length} bytes, language=${languageCode}`);
