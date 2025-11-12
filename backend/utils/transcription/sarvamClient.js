@@ -393,6 +393,8 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.escalatedFlushBytes = parseInt(process.env.SARVAM_ESCALATED_FLUSH_BYTES) || 102400; // ~3.2s @ 16kHz (was 2.4s)
     this.minSpeechFrames = parseInt(process.env.MIN_SPEECH_FRAMES) || 8; // INCREASED: more speech frames required (was 4)
     this.speechFrameCount = 0; // number of speech chunks in current batch
+    // Multi-language detection settings
+    this.maxLanguagesToTest = parseInt(process.env.MAX_LANGUAGES_TO_TEST) || 5; // Test top N languages (1-11, default 5 for speed)
     // Hard caps to prevent runaway accumulation - Sarvam API has 30s limit for realtime endpoint
     // Use 25s to leave margin for processing delays and network latency
     this.maxBatchDurationMs = parseInt(process.env.MAX_BATCH_DURATION_MS) || 25000; // 25s hard cap (Sarvam limit: 30s)
@@ -609,8 +611,9 @@ export class SarvamRealtimeClient extends EventEmitter {
       // Multilingual dual-mode: when language is 'auto', get BOTH original and translated text
       const dualMode = this.language === 'auto' && process.env.MULTILINGUAL_MODE !== 'false';
       
-      // NEW STRATEGY: Use direct transcription with language hints instead of translate API
-      // The translate API has poor accuracy. Better to transcribe in native language first.
+      // MULTI-LANGUAGE STRATEGY: Try all supported languages intelligently
+      // Instead of translate API (poor accuracy), try direct transcription in multiple languages
+      // Pick the best result based on quality metrics (length, word count, confidence)
       if (this.language === 'auto') {
         if (this.degradedTranslate) {
           // Degraded path: first attempt plain transcribe with fallbackLanguage to get original text
@@ -620,30 +623,86 @@ export class SarvamRealtimeClient extends EventEmitter {
           originalText = result.transcript;
         } else {
           try {
-            // NEW APPROACH: Try Hindi first (most common), then get English translation separately
-            logger.info(`[Batch ${batchId}] Attempting direct transcription with Hindi (hi-IN) for better accuracy`);
-            const hindiResult = await this.sttClient.transcribe(wavBuffer, { language: 'hi-IN', withTimestamps: false });
-            originalText = hindiResult.transcript;
-            detectedLang = 'hi-IN';
+            // NEW APPROACH: Try multiple languages in parallel and pick the best result
+            logger.info(`[Batch ${batchId}] Attempting multi-language detection across Indian languages`);
             
-            logger.info(`[Batch ${batchId}] Hindi transcription: "${originalText}" (length: ${originalText ? originalText.length : 0})`);
+            // Languages to try (ordered by popularity for optimization)
+            // Use environment variable to control how many languages to test (1-11)
+            const numLanguages = Math.min(this.maxLanguagesToTest, FALLBACK_LANGUAGE_PRIORITY.length);
+            const languagesToTry = FALLBACK_LANGUAGE_PRIORITY.slice(0, numLanguages);
+            logger.info(`[Batch ${batchId}] Testing ${numLanguages} languages: ${languagesToTry.join(', ')}`);
             
-            // If we got valid Hindi text and dual-mode is enabled, translate it
-            if (dualMode && originalText && originalText.trim().length > 0) {
+            // Try all languages in parallel for speed
+            const transcriptionPromises = languagesToTry.map(async (lang) => {
+              try {
+                const langResult = await this.sttClient.transcribe(wavBuffer, { language: lang, withTimestamps: false });
+                const transcript = (langResult.transcript || '').trim();
+                
+                // Calculate quality score
+                const words = transcript.split(/\s+/).filter(w => w.length > 0);
+                const wordCount = words.length;
+                const avgWordLength = words.reduce((sum, w) => sum + w.length, 0) / (wordCount || 1);
+                const hasValidScript = transcript.length > 0;
+                
+                // Quality score: longer transcripts with more words are likely more accurate
+                const qualityScore = wordCount * 10 + avgWordLength * 2 + (hasValidScript ? 20 : 0);
+                
+                logger.debug(`[Batch ${batchId}] ${lang} result: "${transcript.substring(0, 50)}..." (words: ${wordCount}, quality: ${qualityScore.toFixed(0)})`);
+                
+                return {
+                  language: lang,
+                  transcript: transcript,
+                  wordCount: wordCount,
+                  qualityScore: qualityScore,
+                  avgWordLength: avgWordLength
+                };
+              } catch (err) {
+                logger.debug(`[Batch ${batchId}] ${lang} transcription failed: ${err.message}`);
+                return {
+                  language: lang,
+                  transcript: '',
+                  wordCount: 0,
+                  qualityScore: 0,
+                  avgWordLength: 0
+                };
+              }
+            });
+            
+            // Wait for all attempts to complete
+            const allResults = await Promise.all(transcriptionPromises);
+            
+            // Filter out empty results and sort by quality score
+            const validResults = allResults.filter(r => r.transcript.length > 0);
+            validResults.sort((a, b) => b.qualityScore - a.qualityScore);
+            
+            if (validResults.length === 0) {
+              throw new Error('All language detection attempts returned empty transcripts');
+            }
+            
+            // Pick the best result
+            const bestResult = validResults[0];
+            originalText = bestResult.transcript;
+            detectedLang = bestResult.language;
+            
+            logger.info(`[Batch ${batchId}] Best match: ${detectedLang} (quality: ${bestResult.qualityScore.toFixed(0)}, words: ${bestResult.wordCount})`);
+            logger.info(`[Batch ${batchId}] Detected text: "${originalText}"`);
+            
+            // If not English and dual-mode enabled, translate to English
+            if (dualMode && detectedLang !== 'en-IN' && originalText && originalText.trim().length > 0) {
               try {
                 // Use Sarvam's text translation API for accurate translation
-                logger.info(`[Batch ${batchId}] Translating Hindi text to English`);
+                logger.info(`[Batch ${batchId}] Translating ${detectedLang} text to English`);
                 const { translateText } = await import('../translationService.js');
-                translatedText = await translateText(originalText, 'hi-IN', 'en-IN');
+                translatedText = await translateText(originalText, detectedLang, 'en-IN');
                 logger.info(`[Batch ${batchId}] Translation: "${translatedText}"`);
                 
-                // Check similarity to avoid showing same text twice
+                // Check similarity to avoid showing same text twice (code-mixed or English words)
                 if (translatedText && originalText) {
                   const similarity = this._calculateSimilarity(originalText.toLowerCase(), translatedText.toLowerCase());
                   if (similarity > 0.8) {
-                    logger.info(`[Batch ${batchId}] Texts are ${(similarity * 100).toFixed(0)}% similar - likely English, skipping dual-mode`);
+                    logger.info(`[Batch ${batchId}] Texts are ${(similarity * 100).toFixed(0)}% similar - likely English/code-mixed, using English only`);
                     translatedText = null;
-                    originalText = null;
+                    originalText = translatedText || originalText; // Use translated version
                     detectedLang = 'en-IN';
                   } else {
                     logger.info(`[Batch ${batchId}] Dual-mode activated: original differs from translation (similarity: ${(similarity * 100).toFixed(0)}%)`);
@@ -654,9 +713,12 @@ export class SarvamRealtimeClient extends EventEmitter {
                 // Continue with just original text
                 translatedText = null;
               }
+            } else if (detectedLang === 'en-IN') {
+              logger.info(`[Batch ${batchId}] Detected English - no translation needed`);
+              translatedText = null; // No translation needed for English
             }
             
-            // Use original Hindi text as primary result
+            // Use the best transcription result
             result = {
               transcript: translatedText || originalText, // Use translation if available, else original
               language: detectedLang,
@@ -665,25 +727,22 @@ export class SarvamRealtimeClient extends EventEmitter {
             
           } catch (e) {
             this.translateErrorCount++;
-            logger.error(`[Batch ${batchId}] Hindi transcription failed (count=${this.translateErrorCount}): ${e.message}`);
+            logger.error(`[Batch ${batchId}] Multi-language detection failed (count=${this.translateErrorCount}): ${e.message}`);
             
-            // Fallback: try English
+            // Final fallback: try fallback language directly
             try {
-              logger.info(`[Batch ${batchId}] Falling back to English transcription`);
-              result = await this.sttClient.transcribe(wavBuffer, { language: 'en-IN', withTimestamps: false });
-              result.language = result.language || 'en-IN';
+              logger.info(`[Batch ${batchId}] Final fallback to ${this.fallbackLanguage}`);
+              result = await this.sttClient.transcribe(wavBuffer, { language: this.fallbackLanguage, withTimestamps: false });
+              result.language = result.language || this.fallbackLanguage;
               originalText = result.transcript;
-              translatedText = null; // No translation needed for English
-            } catch (enError) {
-              logger.error(`[Batch ${batchId}] All transcription attempts failed: ${enError.message}`);
+              translatedText = null;
+            } catch (fallbackError) {
+              logger.error(`[Batch ${batchId}] Final fallback failed: ${fallbackError.message}`);
               if (this.translateErrorCount >= this.maxTranslateErrors) {
                 this.degradedTranslate = true;
                 logger.warn('Max translate errors reached; degrading translation mode');
               }
-              // Final fallback
-              result = await this.sttClient.transcribe(wavBuffer, { language: this.fallbackLanguage, withTimestamps: false });
-              result.language = result.language || this.fallbackLanguage;
-              originalText = result.transcript;
+              throw fallbackError;
             }
           }
         }
