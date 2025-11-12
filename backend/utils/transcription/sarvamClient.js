@@ -47,18 +47,28 @@ export class SarvamSTTClient {
       throw new Error('Sarvam API key is required. Get yours at: https://dashboard.sarvam.ai/admin');
     }
     
+    // Validate API key format (basic check)
+    if (typeof apiKey !== 'string' || apiKey.length < 10) {
+      throw new Error('Invalid Sarvam API key format');
+    }
+    
     this.apiKey = apiKey;
     this.baseURL = options.baseURL || SARVAM_BASE_URL;
     this.language = options.language || 'en-IN'; // Default to English
-    this.model = options.model || 'saarika:v2.5';
+    // Use latest stable model version - saarika:v2 is most accurate per Sarvam docs
+    this.model = options.model || process.env.SARVAM_STT_MODEL || 'saarika:v2';
     this.withTimestamps = options.withTimestamps !== false;
+    this.enablePreprocessing = options.enablePreprocessing !== false; // Enable by default for accuracy
     
     this.client = axios.create({
       baseURL: this.baseURL,
       headers: {
         'api-subscription-key': this.apiKey,
+        'Content-Type': 'multipart/form-data'
       },
       timeout: 60000, // 60s for audio processing
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity
     });
   }
 
@@ -74,9 +84,21 @@ export class SarvamSTTClient {
   }
 
   /**
-   * Validate audio buffer size
+   * Validate audio buffer size and quality
    */
   _validateAudioSize(audioBuffer) {
+    if (!audioBuffer || !Buffer.isBuffer(audioBuffer)) {
+      throw new Error('Invalid audio buffer: must be a Buffer object');
+    }
+    
+    if (audioBuffer.length === 0) {
+      throw new Error('Empty audio buffer provided');
+    }
+    
+    if (audioBuffer.length < 1000) {
+      logger.warn(`Very small audio buffer: ${audioBuffer.length} bytes - may produce poor results`);
+    }
+    
     if (audioBuffer.length > MAX_FILE_SIZE) {
       throw new Error(`Audio buffer size (${audioBuffer.length} bytes) exceeds maximum (${MAX_FILE_SIZE} bytes / 10MB)`);
     }
@@ -115,12 +137,15 @@ export class SarvamSTTClient {
   /**
    * Transcribe audio buffer to text
    * @param {Buffer} audioBuffer - Audio file buffer (WAV/MP3, 16kHz recommended)
-   * @param {Object} options - Override language, model, timestamps
+   * @param {Object} options - Override language, model, timestamps, retryCount
    * @returns {Promise<Object>} { transcript, language, timestamp }
    */
   async transcribe(audioBuffer, options = {}) {
+    const retryCount = options._retryCount || 0;
+    const maxRetries = 3;
+    
     try {
-      // Validate audio size
+      // Validate audio size and quality
       this._validateAudioSize(audioBuffer);
       
       // Validate WAV format if it looks like WAV
@@ -173,9 +198,25 @@ export class SarvamSTTClient {
         language: languageCode,
         timestamp: Date.now(),
         duration: response.data.duration_in_seconds,
+        retries: retryCount
       };
     } catch (error) {
-      throw this._handleError(error, 'transcribe');
+      const wrappedError = this._handleError(error, 'transcribe');
+      
+      // Retry logic for transient errors
+      const isRateLimit = error.response?.status === 429;
+      const isTimeout = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT';
+      const isServerError = error.response?.status >= 500;
+      const shouldRetry = (isRateLimit || isTimeout || isServerError) && retryCount < maxRetries;
+      
+      if (shouldRetry) {
+        const delayMs = isRateLimit ? 2000 * (retryCount + 1) : 1000 * Math.pow(2, retryCount);
+        logger.warn(`Retrying transcribe after ${delayMs}ms (attempt ${retryCount + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        return this.transcribe(audioBuffer, { ...options, _retryCount: retryCount + 1 });
+      }
+      
+      throw wrappedError;
     }
   }
 
@@ -651,29 +692,47 @@ export class SarvamRealtimeClient extends EventEmitter {
                 const langResult = await this.sttClient.transcribe(wavBuffer, { language: lang, withTimestamps: false });
                 const transcript = (langResult.transcript || '').trim();
                 
-                // Calculate quality score - SIMPLIFIED for speed
+                // Calculate quality score - ENHANCED for better accuracy
                 const words = transcript.split(/\s+/).filter(w => w.length > 0);
                 const wordCount = words.length;
                 const charCount = transcript.length;
                 
-                // SPEED-OPTIMIZED quality score - simple linear formula
-                // Formula: (words × 10) + (chars × 0.3) + bonus
-                // Fast calculation, no exponential math
-                const qualityScore = (wordCount * 10) + (charCount * 0.3) + (transcript.length > 0 ? 20 : 0);
+                // Enhanced quality scoring for accuracy
+                // Factors: word count (most important), character count, average word length, linguistic patterns
+                const avgWordLength = wordCount > 0 ? charCount / wordCount : 0;
+                const hasValidWordLength = avgWordLength >= 3 && avgWordLength <= 15; // typical word range
+                const hasProperCapitalization = /[A-Z]/.test(transcript); // Check for capitalization
+                const hasNoRepeats = !/(.{3,})\1{2,}/.test(transcript); // No excessive repetition
                 
-                logger.debug(`[Batch ${batchId}] ${lang} result: "${transcript.substring(0, 50)}..." (words: ${wordCount}, chars: ${charCount}, quality: ${qualityScore.toFixed(0)})`);
+                // ACCURACY-OPTIMIZED quality score
+                // Formula: Base (word × 15) + chars + avg length bonus + validation bonuses
+                let qualityScore = (wordCount * 15) + (charCount * 0.5) + (avgWordLength * 3);
+                
+                // Bonus points for quality indicators
+                if (hasValidWordLength) qualityScore += 25;
+                if (hasProperCapitalization && lang === 'en-IN') qualityScore += 15;
+                if (hasNoRepeats) qualityScore += 20;
+                if (transcript.length > 0) qualityScore += 10;
+                
+                // Penalty for suspicious patterns
+                if (wordCount === 1 && charCount > 30) qualityScore *= 0.5; // Single long word = suspicious
+                if (avgWordLength < 2 || avgWordLength > 20) qualityScore *= 0.7; // Unusual word lengths
+                
+                logger.debug(`[Batch ${batchId}] ${lang} result: "${transcript.substring(0, 50)}..." (words: ${wordCount}, chars: ${charCount}, avg: ${avgWordLength.toFixed(1)}, quality: ${qualityScore.toFixed(0)})`);
                 
                 allResults.push({
                   language: lang,
                   transcript: transcript,
                   wordCount: wordCount,
                   charCount: charCount,
+                  avgWordLength: avgWordLength,
                   qualityScore: qualityScore
                 });
                 
                 // EARLY EXIT: If we find a high-quality result, stop testing more languages
                 // This saves API calls and reduces latency significantly
-                if (qualityScore >= 100 && wordCount >= 5) {
+                // Increased threshold to 150 for better accuracy (was 100)
+                if (qualityScore >= 150 && wordCount >= 5 && hasNoRepeats) {
                   logger.info(`[Batch ${batchId}] Found high-quality match for ${lang} (quality: ${qualityScore.toFixed(0)}), stopping early`);
                   break;
                 }

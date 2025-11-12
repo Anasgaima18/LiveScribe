@@ -71,42 +71,68 @@ export const detectLanguage = async (text) => {
  * @param {string} text - Text to translate
  * @param {string} targetLang - Target language code (e.g., 'en-IN', 'hi-IN')
  * @param {string} sourceLang - Source language code (optional, will auto-detect)
+ * @param {number} retryCount - Internal retry counter (default: 0)
  * @returns {Promise<object>} - Translation result
  */
-export const translateText = async (text, targetLang, sourceLang = null) => {
+export const translateText = async (text, targetLang, sourceLang = null, retryCount = 0) => {
   try {
-    if (!text || text.trim().length === 0) {
+    // Input validation
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
       return {
-        translatedText: text,
+        translatedText: text || '',
         detectedLanguage: sourceLang || 'en-IN',
         targetLanguage: targetLang,
         isTranslated: false,
-        message: 'Empty text provided'
+        message: 'Empty or invalid text provided'
       };
+    }
+    
+    // Validate and sanitize text (max 5000 chars per Sarvam API limits)
+    const sanitizedText = text.trim().substring(0, 5000);
+    if (text.length !== sanitizedText.length) {
+      logger.warn(`Text truncated from ${text.length} to ${sanitizedText.length} characters`);
     }
 
     // Check if Sarvam API key is configured
     if (!SARVAM_API_KEY) {
       logger.warn('Sarvam AI API key not configured');
       return {
-        translatedText: text,
+        translatedText: sanitizedText,
         detectedLanguage: sourceLang || 'en-IN',
         targetLanguage: targetLang,
         isTranslated: false,
         message: 'Translation service not configured'
       };
     }
+    
+    // Validate language codes
+    if (!SUPPORTED_LANGUAGES[targetLang]) {
+      logger.error(`Unsupported target language: ${targetLang}`);
+      return {
+        translatedText: sanitizedText,
+        detectedLanguage: sourceLang || 'en-IN',
+        targetLanguage: targetLang,
+        isTranslated: false,
+        error: `Unsupported target language: ${targetLang}`
+      };
+    }
 
     // Auto-detect source language if not provided
     if (!sourceLang) {
-      sourceLang = await detectLanguage(text);
+      sourceLang = await detectLanguage(sanitizedText);
       logger.debug(`Auto-detected source language: ${sourceLang}`);
+    }
+    
+    // Validate source language
+    if (!SUPPORTED_LANGUAGES[sourceLang]) {
+      logger.warn(`Unsupported source language: ${sourceLang}, defaulting to en-IN`);
+      sourceLang = 'en-IN';
     }
 
     // If source and target are the same, no translation needed
     if (sourceLang === targetLang) {
       return {
-        translatedText: text,
+        translatedText: sanitizedText,
         detectedLanguage: sourceLang,
         targetLanguage: targetLang,
         isTranslated: false
@@ -114,18 +140,18 @@ export const translateText = async (text, targetLang, sourceLang = null) => {
     }
 
     // Call Sarvam AI Translation API
-    logger.info(`Translating text from ${sourceLang} to ${targetLang}: "${text.substring(0, 50)}..."`);
+    logger.info(`Translating text from ${sourceLang} to ${targetLang}: "${sanitizedText.substring(0, 50)}..."`);
     
     const response = await axios.post(
       `${SARVAM_BASE_URL}/translate`,
       {
-        input: text,
+        input: sanitizedText,
         source_language_code: sourceLang,
         target_language_code: targetLang,
         speaker_gender: 'Female', // Optional: can be parameterized
         mode: 'formal', // Optional: 'formal' or 'casual'
         model: 'mayura:v1',
-        enable_preprocessing: false
+        enable_preprocessing: true // ACCURACY FIX: Enable text preprocessing for better translation quality
       },
       {
         headers: {
@@ -154,11 +180,27 @@ export const translateText = async (text, targetLang, sourceLang = null) => {
     };
 
   } catch (error) {
+    const isRateLimit = error.response?.status === 429;
+    const isTimeout = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT';
+    const isServerError = error.response?.status >= 500;
+    const shouldRetry = (isRateLimit || isTimeout || isServerError) && retryCount < 3;
+    
     logger.error('Sarvam translation error:', {
       message: error.message,
       response: error.response?.data,
-      status: error.response?.status
+      status: error.response?.status,
+      code: error.code,
+      retryCount,
+      willRetry: shouldRetry
     });
+    
+    // Retry with exponential backoff for transient errors
+    if (shouldRetry) {
+      const delayMs = isRateLimit ? 2000 * (retryCount + 1) : 1000 * Math.pow(2, retryCount);
+      logger.warn(`Retrying translation after ${delayMs}ms (attempt ${retryCount + 1}/3)`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+      return translateText(text, targetLang, sourceLang, retryCount + 1);
+    }
     
     // Fallback: return original text
     return {
