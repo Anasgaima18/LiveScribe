@@ -362,19 +362,19 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.currentSize = 0;
     this.language = options.language || 'en-IN'; // Default to English
     this.isActive = false;
-    // Enhanced VAD / filtering configuration
-    this.minRmsInt16 = parseInt(process.env.MIN_RMS_INT16) || options.minRms || 120;
-    this.maxSilenceChunks = options.maxSilenceChunks || 12;
+    // Enhanced VAD / filtering configuration - STRICTER for maximum accuracy
+    this.minRmsInt16 = parseInt(process.env.MIN_RMS_INT16) || options.minRms || 150; // Increased from 120 - require clearer audio
+    this.maxSilenceChunks = options.maxSilenceChunks || 10; // Reduced from 12 - less tolerance for silence
     this.silenceCount = 0;
     this.lastTranscript = '';
     this.lastTranscriptTime = 0;
     this.duplicateWindowMs = options.duplicateWindowMs || 3000; // suppress duplicates within 3s
     this.genericFillers = options.genericFillers || ['yes', 'yeah', 'ya', 'ok', 'okay', 'hmm', 'uh', 'um'];
     this.hadSpeech = false;
-  this.minFlushBytes = options.minFlushBytes || 153600; // ~4.8s @ 16kHz (76800 samples) - INCREASED for complete sentences
+  this.minFlushBytes = options.minFlushBytes || 192000; // ~6s @ 16kHz (96000 samples) - MAXIMUM context for accuracy
     
-    // Batching configuration - INCREASED to 4s minimum for better word-level accuracy
-    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 4000; // min 4s batch for complete context
+    // Batching configuration - INCREASED to 5s minimum for MAXIMUM word-level accuracy
+    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 5000; // min 5s batch for maximum context
     this.batchStartTime = null;
     this.totalDurationMs = 0;
     this._chunkCount = 0;
@@ -389,12 +389,12 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.unknownStreak = 0; // consecutive unknown-language short transcripts
     this.maxUnknownStreak = parseInt(process.env.SARVAM_MAX_UNKNOWN_STREAK) || 3;
     this.fallbackLanguage = process.env.SARVAM_FALLBACK_LANGUAGE || 'hi-IN'; // Changed to Hindi for better accuracy
-    this.escalatedDurationMs = parseInt(process.env.SARVAM_ESCALATED_DURATION_MS) || 5000; // escalate to 5s for complete sentences
-    this.escalatedFlushBytes = parseInt(process.env.SARVAM_ESCALATED_FLUSH_BYTES) || 153600; // ~4.8s @ 16kHz for full context
-    this.minSpeechFrames = parseInt(process.env.MIN_SPEECH_FRAMES) || 12; // INCREASED: require more speech for quality (was 8)
+    this.escalatedDurationMs = parseInt(process.env.SARVAM_ESCALATED_DURATION_MS) || 6000; // escalate to 6s for maximum quality
+    this.escalatedFlushBytes = parseInt(process.env.SARVAM_ESCALATED_FLUSH_BYTES) || 192000; // ~6s @ 16kHz for maximum context
+    this.minSpeechFrames = parseInt(process.env.MIN_SPEECH_FRAMES) || 15; // MAXIMUM: require highest speech quality (was 12)
     this.speechFrameCount = 0; // number of speech chunks in current batch
-    // Multi-language detection settings
-    this.maxLanguagesToTest = parseInt(process.env.MAX_LANGUAGES_TO_TEST) || 5; // Test top N languages (1-11, default 5 for speed)
+    // Multi-language detection settings - TEST ALL 11 LANGUAGES FOR MAXIMUM ACCURACY
+    this.maxLanguagesToTest = parseInt(process.env.MAX_LANGUAGES_TO_TEST) || 11; // Test ALL languages for best accuracy (was 5)
     // Hard caps to prevent runaway accumulation - Sarvam API has 30s limit for realtime endpoint
     // Use 25s to leave margin for processing delays and network latency
     this.maxBatchDurationMs = parseInt(process.env.MAX_BATCH_DURATION_MS) || 25000; // 25s hard cap (Sarvam limit: 30s)
@@ -638,17 +638,18 @@ export class SarvamRealtimeClient extends EventEmitter {
                 const langResult = await this.sttClient.transcribe(wavBuffer, { language: lang, withTimestamps: false });
                 const transcript = (langResult.transcript || '').trim();
                 
-                // Calculate quality score
+                // Calculate quality score with MAXIMUM discrimination for accuracy
                 const words = transcript.split(/\s+/).filter(w => w.length > 0);
                 const wordCount = words.length;
                 const avgWordLength = words.reduce((sum, w) => sum + w.length, 0) / (wordCount || 1);
                 const hasValidScript = transcript.length > 0;
                 const charCount = transcript.length;
                 
-                // Enhanced quality score: favor longer transcripts with more words and characters
-                // Formula: (words × 15) + (chars × 0.5) + (avg_word_length × 3) + bonus
-                // This ensures complete sentences score much higher than fragments
-                const qualityScore = (wordCount * 15) + (charCount * 0.5) + (avgWordLength * 3) + (hasValidScript ? 30 : 0);
+                // MAXIMUM ACCURACY quality score - heavily penalize fragments, reward complete sentences
+                // Formula: (words × 20) + (chars × 1.0) + (avg_word_length × 5) + bonus
+                // Exponential bonus for longer transcripts (word_count^1.2)
+                const lengthBonus = Math.pow(wordCount, 1.2) * 5; // Exponential reward for length
+                const qualityScore = (wordCount * 20) + (charCount * 1.0) + (avgWordLength * 5) + lengthBonus + (hasValidScript ? 50 : 0);
                 
                 logger.debug(`[Batch ${batchId}] ${lang} result: "${transcript.substring(0, 50)}..." (words: ${wordCount}, chars: ${charCount}, quality: ${qualityScore.toFixed(0)})`);
                 
