@@ -458,6 +458,12 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.maxTranslateErrors = parseInt(process.env.MAX_TRANSLATE_ERRORS) || 3;
     this.degradedTranslate = false; // when true skip translate endpoint
     this.emptyBatchStreak = 0; // consecutive batches with empty transcripts
+
+    // Preflight language detection and guards
+    this.preflightDetect = process.env.SARVAM_PREFLIGHT_DETECT !== 'false';
+    this.preflightSeconds = parseFloat(process.env.SARVAM_PREFLIGHT_SECONDS || '1.6');
+    this.enableTTGuard = process.env.SARVAM_ENABLE_TT_GUARD !== 'false';
+    this.lastDetectedLanguage = null; // heuristic to prioritize recent language
   }
 
   start() {
@@ -713,14 +719,36 @@ export class SarvamRealtimeClient extends EventEmitter {
         }
       }
 
-      let result;
+  let result;
       let originalText = null;
       let translatedText = null;
       let detectedLang = null;
+  let preflightDetectedLang = null;
+  let similarityScore = null;
       
       // Multilingual dual-mode: when language is 'auto', get BOTH original and translated text
       const dualMode = this.language === 'auto' && process.env.MULTILINGUAL_MODE !== 'false';
       
+      // Optional preflight detection using speech-to-text-translate(auto) on a short head sample
+      if (this.language === 'auto' && this.preflightDetect) {
+        try {
+          const headBytes = Math.min(normalizedBuffer.length, Math.floor(this.preflightSeconds * 16000 * 2));
+          const headPcm = normalizedBuffer.subarray(0, headBytes);
+          const headWav = this._pcm16ToWav(headPcm, 16000, 1);
+          logger.info(`[Batch ${batchId}] Preflight detect on ${this.preflightSeconds.toFixed(1)}s head (${headBytes} bytes)`);
+          const pre = await this.sttClient.transcribeAndTranslate(headWav, { model: 'saaras:v2.5' });
+          const norm = this._normalizeLanguageCode(pre.detectedLanguage);
+          if (pre.transcript && pre.transcript.trim().length > 0 && norm) {
+            preflightDetectedLang = norm;
+            logger.info(`[Batch ${batchId}] Preflight detected language: ${pre.detectedLanguage} -> ${norm}`);
+          } else {
+            logger.debug(`[Batch ${batchId}] Preflight detection inconclusive`);
+          }
+        } catch (pfErr) {
+          logger.debug(`[Batch ${batchId}] Preflight detect failed: ${pfErr.message}`);
+        }
+      }
+
       // MULTI-LANGUAGE STRATEGY: Try all supported languages intelligently
       // Instead of translate API (poor accuracy), try direct transcription in multiple languages
       // Pick the best result based on quality metrics (length, word count, confidence)
@@ -739,8 +767,12 @@ export class SarvamRealtimeClient extends EventEmitter {
             // Languages to try (ordered by popularity for optimization)
             // Use environment variable to control how many languages to test (1-11)
             const numLanguages = Math.min(this.maxLanguagesToTest, FALLBACK_LANGUAGE_PRIORITY.length);
-            const languagesToTry = FALLBACK_LANGUAGE_PRIORITY.slice(0, numLanguages);
-            logger.info(`[Batch ${batchId}] Testing ${numLanguages} languages: ${languagesToTry.join(', ')}`);
+            const baseList = FALLBACK_LANGUAGE_PRIORITY.slice(0, numLanguages);
+            const prioritized = [];
+            if (this.lastDetectedLanguage) prioritized.push(this.lastDetectedLanguage);
+            if (preflightDetectedLang) prioritized.push(preflightDetectedLang);
+            const languagesToTry = [...new Set([...prioritized, ...baseList])].slice(0, numLanguages);
+            logger.info(`[Batch ${batchId}] Testing ${languagesToTry.length} languages: ${languagesToTry.join(', ')}`);
             
             // SEQUENTIAL language testing with rate limit handling (prevents 429 errors)
             // Test languages one-by-one with minimal delays to respect API rate limits
@@ -962,6 +994,7 @@ export class SarvamRealtimeClient extends EventEmitter {
                 } else {
                   // Check similarity to detect English input or code-mixing
                   const similarity = this._calculateSimilarity(originalText.toLowerCase(), translatedText.toLowerCase());
+                  similarityScore = similarity;
                   if (similarity > 0.8) {
                     logger.info(`[Batch ${batchId}] Texts are ${(similarity * 100).toFixed(0)}% similar - likely English input`);
                     // Still keep both for dual-mode display, but mark as English
@@ -975,6 +1008,25 @@ export class SarvamRealtimeClient extends EventEmitter {
                 // Fallback: use original text as both original and translated
                 translatedText = originalText;
                 logger.warn(`[Batch ${batchId}] Using original text as fallback`);
+              }
+              // Guard: if translation seems low-confidence for short or code-mixed text, try auto transcribe+translate on full batch
+              if (this.enableTTGuard && detectedLang !== 'en-IN') {
+                const ow = (originalText || '').trim().split(/\s+/).filter(Boolean).length;
+                if (ow < 4 || (typeof similarityScore === 'number' && similarityScore < 0.2)) {
+                  try {
+                    logger.warn(`[Batch ${batchId}] Low-confidence translation (words=${ow}, sim=${similarityScore ?? 'n/a'}) — trying transcribe+translate(auto)`);
+                    const auto = await this.sttClient.transcribeAndTranslate(wavBuffer, { model: 'saaras:v2.5' });
+                    const autoText = (auto.transcript || '').trim();
+                    if (autoText && autoText.split(/\s+/).length > (translatedText || '').split(/\s+/).length) {
+                      translatedText = autoText;
+                      const normAuto = this._normalizeLanguageCode(auto.detectedLanguage);
+                      if (normAuto) detectedLang = normAuto;
+                      logger.info(`[Batch ${batchId}] Using auto transcribe+translate result for English transcript`);
+                    }
+                  } catch (guardErr) {
+                    logger.debug(`[Batch ${batchId}] TT guard attempt failed: ${guardErr.message}`);
+                  }
+                }
               }
             } else if (detectedLang === 'en-IN') {
               logger.info(`[Batch ${batchId}] Detected English - using as-is`);
@@ -1117,9 +1169,10 @@ export class SarvamRealtimeClient extends EventEmitter {
         return;
       }
 
-      // Accept transcript
+  // Accept transcript
       this.lastTranscript = result.transcript.trim();
       this.lastTranscriptTime = now;
+  this.lastDetectedLanguage = result.language || this.lastDetectedLanguage;
       
       // Emit with dual-mode support
       const eventData = {
@@ -1216,6 +1269,24 @@ export class SarvamRealtimeClient extends EventEmitter {
     const distance = matrix[len2][len1];
     const maxLen = Math.max(len1, len2);
     return 1.0 - (distance / maxLen);
+  }
+
+  /**
+   * Normalize detected language codes to Sarvam -IN variants
+   */
+  _normalizeLanguageCode(code) {
+    if (!code || typeof code !== 'string') return null;
+    const c = code.trim();
+    // Already a supported code
+    if (FALLBACK_LANGUAGE_PRIORITY.includes(c)) return c;
+    const lc = c.toLowerCase();
+    if (FALLBACK_LANGUAGE_PRIORITY.includes(lc)) return lc;
+    const base = lc.split(/[-_]/)[0];
+    const map = {
+      en: 'en-IN', hi: 'hi-IN', bn: 'bn-IN', kn: 'kn-IN', ml: 'ml-IN', mr: 'mr-IN',
+      or: 'od-IN', odi: 'od-IN', od: 'od-IN', pa: 'pa-IN', ta: 'ta-IN', te: 'te-IN', gu: 'gu-IN'
+    };
+    return map[base] || null;
   }
 
   /**
