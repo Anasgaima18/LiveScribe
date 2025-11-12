@@ -464,6 +464,9 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.preflightSeconds = parseFloat(process.env.SARVAM_PREFLIGHT_SECONDS || '1.6');
     this.enableTTGuard = process.env.SARVAM_ENABLE_TT_GUARD !== 'false';
     this.lastDetectedLanguage = null; // heuristic to prioritize recent language
+
+    // Latency mode: 'accuracy' (default) or 'speed' (reduced language set, looser early-exit for short phrases)
+    this.latencyMode = process.env.SARVAM_LATENCY_MODE || 'accuracy';
   }
 
   start() {
@@ -771,7 +774,12 @@ export class SarvamRealtimeClient extends EventEmitter {
             const prioritized = [];
             if (this.lastDetectedLanguage) prioritized.push(this.lastDetectedLanguage);
             if (preflightDetectedLang) prioritized.push(preflightDetectedLang);
-            const languagesToTry = [...new Set([...prioritized, ...baseList])].slice(0, numLanguages);
+            // Always include English early for short utterances
+            prioritized.push('en-IN');
+            const fullList = [...new Set([...prioritized, ...baseList])];
+            const speedCap = parseInt(process.env.SPEED_MAX_LANGUAGES || '6');
+            const cap = this.latencyMode === 'speed' ? Math.min(fullList.length, speedCap) : fullList.length;
+            const languagesToTry = fullList.slice(0, cap);
             logger.info(`[Batch ${batchId}] Testing ${languagesToTry.length} languages: ${languagesToTry.join(', ')}`);
             
             // SEQUENTIAL language testing with rate limit handling (prevents 429 errors)
@@ -897,13 +905,32 @@ export class SarvamRealtimeClient extends EventEmitter {
                 }
                 qualityScore += languageMatchBonus;
                 
-                // EARLY EXIT: Only stop if we find an EXCEPTIONAL result (highest quality)
-                // For BEST detection, we need very high confidence before stopping early
-                // Raised threshold to 200 for ULTIMATE accuracy + strict language validation
-                if (qualityScore >= 200 && wordCount >= 6 && hasNoRepeats && languageMatchBonus > 0 && hasValidWordLength) {
+                // EARLY EXIT: dynamic thresholds to reduce latency for short utterances
+                const strictScore = parseInt(process.env.EARLY_EXIT_STRICT_SCORE || '200');
+                const shortScore = parseInt(process.env.EARLY_EXIT_SHORT_SCORE || '170');
+                const shortMinWords = parseInt(process.env.EARLY_EXIT_SHORT_MIN_WORDS || '2');
+                let shouldEarlyExit = false;
+                // Original strict path (high confidence, longer text)
+                if (qualityScore >= strictScore && wordCount >= 6 && hasNoRepeats && languageMatchBonus > 0 && hasValidWordLength) {
+                  shouldEarlyExit = true;
                   logger.info(`[Batch ${batchId}] Found EXCEPTIONAL match for ${lang} (quality: ${qualityScore.toFixed(0)}, lang bonus: ${languageMatchBonus}), stopping early`);
-                  break;
+                } else {
+                  // Short-utterance fast path with strong script match
+                  if (wordCount >= shortMinWords && qualityScore >= shortScore && languageMatchBonus >= 25) {
+                    shouldEarlyExit = true;
+                    logger.info(`[Batch ${batchId}] Early exit (short utterance) for ${lang} (quality: ${qualityScore.toFixed(0)}, words: ${wordCount}, bonus: ${languageMatchBonus})`);
+                  }
+                  // English special-case: very high ASCII ratio and decent score
+                  if (!shouldEarlyExit && lang === 'en-IN') {
+                    const asciiRatio = (transcript.match(/[a-zA-Z\s]/g) || []).length / Math.max(1, transcript.length);
+                    const englishScore = parseInt(process.env.EARLY_EXIT_EN_SCORE || '160');
+                    if (wordCount >= 2 && asciiRatio >= 0.9 && qualityScore >= englishScore) {
+                      shouldEarlyExit = true;
+                      logger.info(`[Batch ${batchId}] Early exit (English fast path) for en-IN (ascii=${(asciiRatio*100).toFixed(0)}%, q=${qualityScore.toFixed(0)})`);
+                    }
+                  }
                 }
+                if (shouldEarlyExit) break;
                 
               } catch (err) {
                 // Check if it's a rate limit error (429)
