@@ -160,7 +160,13 @@ export class SarvamSTTClient {
         },
       });
 
-      logger.debug(`Sarvam transcribe response: status=${response.status}, transcript="${response.data.transcript}"`);
+      const transcript = response.data.transcript || '';
+      logger.debug(`Sarvam transcribe response: status=${response.status}, transcript="${transcript}" (length: ${transcript.length})`);
+      
+      // Log warning if empty transcript
+      if (!transcript || transcript.trim().length === 0) {
+        logger.warn(`Empty transcript from /speech-to-text (lang: ${languageCode}, size: ${audioBuffer.length})`);
+      }
 
       return {
         transcript: response.data.transcript || '',
@@ -528,17 +534,22 @@ export class SarvamRealtimeClient extends EventEmitter {
     if (this.audioChunks.length === 0) return;
     if (this.processing) return; // guard
     this.processing = true;
+    
+    // Generate unique batch ID for tracking
+    const batchId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    logger.debug(`[Batch ${batchId}] Starting processing of ${this.audioChunks.length} chunks`);
+    
     try {
       const audioBuffer = Buffer.concat(this.audioChunks);
       if (audioBuffer.length < this.minFlushBytes) {
         if (this.debugCapture) {
-          logger.debug(`Deferring STT: only ${audioBuffer.length} bytes (${this.totalDurationMs.toFixed(0)}ms) < minFlushBytes=${this.minFlushBytes}`);
+          logger.debug(`[Batch ${batchId}] Deferring STT: only ${audioBuffer.length} bytes (${this.totalDurationMs.toFixed(0)}ms) < minFlushBytes=${this.minFlushBytes}`);
         }
         this.processing = false;
         return;
       }
 
-      logger.info(`Processing ${audioBuffer.length} bytes for transcription (${this.audioChunks.length} chunks, ${this.totalDurationMs.toFixed(0)}ms)`);
+      logger.info(`[Batch ${batchId}] Processing ${audioBuffer.length} bytes for transcription (${this.audioChunks.length} chunks, ${this.totalDurationMs.toFixed(0)}ms)`);
 
       // Aggregate RMS gate
       const samples = new Int16Array(audioBuffer.buffer, audioBuffer.byteOffset, audioBuffer.length / 2);
@@ -560,7 +571,21 @@ export class SarvamRealtimeClient extends EventEmitter {
       }
 
       const wavBuffer = this._pcm16ToWav(audioBuffer, 16000, 1);
-      logger.debug(`Converted to WAV: ${wavBuffer.length} bytes`);
+      logger.debug(`[Batch ${batchId}] Converted to WAV: ${wavBuffer.length} bytes from ${audioBuffer.length} bytes PCM`);
+      
+      // Calculate audio quality metrics
+      const qualitySamples = new Int16Array(audioBuffer.buffer, audioBuffer.byteOffset, audioBuffer.length / 2);
+      let sum = 0, peak = 0, nonZero = 0;
+      for (let i = 0; i < qualitySamples.length; i++) {
+        const v = Math.abs(qualitySamples[i]);
+        sum += v * v;
+        if (v > peak) peak = v;
+        if (v > 0) nonZero++;
+      }
+      const rms = Math.sqrt(sum / qualitySamples.length);
+      const rmsDb = 20 * Math.log10(rms / 32768);
+      const nonZeroPercent = ((nonZero / qualitySamples.length) * 100).toFixed(1);
+      logger.info(`[Batch ${batchId}] Audio quality - RMS: ${rms.toFixed(0)} (${rmsDb.toFixed(1)} dB), Peak: ${peak}, Non-zero: ${nonZeroPercent}%, Samples: ${qualitySamples.length}`);
 
       if (process.env.SARVAM_DEBUG_DUMP_WAV === 'true') {
         try {
@@ -619,9 +644,16 @@ export class SarvamRealtimeClient extends EventEmitter {
                   logger.info(`Dual-mode: fetching original text in detected language ${detectedLang}`);
                 }
                 
+                // Re-use the same WAV buffer for original text fetch
+                logger.debug(`[Batch ${batchId}] Fetching original text - WAV buffer size: ${wavBuffer.length} bytes, target language: ${originalLang}`);
                 const originalResult = await this.sttClient.transcribe(wavBuffer, { language: originalLang, withTimestamps: false });
                 originalText = originalResult.transcript;
-                logger.info(`Original text in ${originalLang}: "${originalText}"`);
+                logger.info(`[Batch ${batchId}] Original text in ${originalLang}: "${originalText}" (length: ${originalText ? originalText.length : 0})`);
+                
+                // Check if the original transcription failed silently
+                if (!originalText || originalText.trim().length === 0) {
+                  logger.warn(`[Batch ${batchId}] Empty original text received for language ${originalLang} - audio may be incompatible or API throttled`);
+                }
                 
                 // If original and translated are very similar (English input), skip dual display
                 if (originalText && translatedText) {
