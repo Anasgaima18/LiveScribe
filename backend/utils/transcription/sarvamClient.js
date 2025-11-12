@@ -362,39 +362,39 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.currentSize = 0;
     this.language = options.language || 'en-IN'; // Default to English
     this.isActive = false;
-    // Enhanced VAD / filtering configuration - BALANCED for speed vs quality
-    this.minRmsInt16 = parseInt(process.env.MIN_RMS_INT16) || options.minRms || 100; // Reduced from 150 - accept more audio
-    this.maxSilenceChunks = options.maxSilenceChunks || 8; // Reduced from 10 - faster flush on silence
+    // Enhanced VAD / filtering configuration - ULTRA-SENSITIVE for real-time
+    this.minRmsInt16 = parseInt(process.env.MIN_RMS_INT16) || options.minRms || 80; // Very sensitive - catch all speech
+    this.maxSilenceChunks = options.maxSilenceChunks || 5; // Very fast flush on silence (instant response)
     this.silenceCount = 0;
     this.lastTranscript = '';
     this.lastTranscriptTime = 0;
     this.duplicateWindowMs = options.duplicateWindowMs || 3000; // suppress duplicates within 3s
     this.genericFillers = options.genericFillers || ['yes', 'yeah', 'ya', 'ok', 'okay', 'hmm', 'uh', 'um'];
     this.hadSpeech = false;
-  this.minFlushBytes = options.minFlushBytes || 64000; // ~2s @ 16kHz (32000 samples) - OPTIMIZED for speed
+  this.minFlushBytes = options.minFlushBytes || 48000; // ~1.5s @ 16kHz (24000 samples) - REAL-TIME optimized
     
-    // Batching configuration - OPTIMIZED for LOW LATENCY (was 5s for accuracy)
-    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 1800; // min 1.8s batch for fast response
+    // Batching configuration - ULTRA-LOW LATENCY for real-time feel
+    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 1200; // min 1.2s batch for instant response
     this.batchStartTime = null;
     this.totalDurationMs = 0;
     this._chunkCount = 0;
     this._droppedChunks = 0;
     
     // Minimum word count to accept transcript (reject short filler responses)
-    this.minWordCount = parseInt(process.env.MIN_WORD_COUNT) || 1; // accept 1+ words - SPEED OPTIMIZED
+    this.minWordCount = parseInt(process.env.MIN_WORD_COUNT) || 1; // accept 1+ words - REAL-TIME optimized
     
     this.debugCapture = (process.env.DEBUG_AUDIO_CAPTURE === 'true');
 
     // Adaptive handling for repeated unknown / low-quality transcripts
     this.unknownStreak = 0; // consecutive unknown-language short transcripts
-    this.maxUnknownStreak = parseInt(process.env.SARVAM_MAX_UNKNOWN_STREAK) || 2; // Reduced for faster fallback
+    this.maxUnknownStreak = parseInt(process.env.SARVAM_MAX_UNKNOWN_STREAK) || 1; // Instant fallback for real-time
     this.fallbackLanguage = process.env.SARVAM_FALLBACK_LANGUAGE || 'hi-IN'; // Hindi fallback
-    this.escalatedDurationMs = parseInt(process.env.SARVAM_ESCALATED_DURATION_MS) || 2500; // Fast escalation (was 6s)
-    this.escalatedFlushBytes = parseInt(process.env.SARVAM_ESCALATED_FLUSH_BYTES) || 80000; // ~2.5s @ 16kHz - SPEED OPTIMIZED
-    this.minSpeechFrames = parseInt(process.env.MIN_SPEECH_FRAMES) || 6; // REDUCED: faster triggering (was 15)
+    this.escalatedDurationMs = parseInt(process.env.SARVAM_ESCALATED_DURATION_MS) || 1500; // Ultra-fast escalation (1.5s)
+    this.escalatedFlushBytes = parseInt(process.env.SARVAM_ESCALATED_FLUSH_BYTES) || 48000; // ~1.5s @ 16kHz - REAL-TIME
+    this.minSpeechFrames = parseInt(process.env.MIN_SPEECH_FRAMES) || 4; // MINIMAL: instant triggering (was 6)
     this.speechFrameCount = 0; // number of speech chunks in current batch
-    // Multi-language detection settings - OPTIMIZED for SPEED (test top 3 languages only)
-    this.maxLanguagesToTest = parseInt(process.env.MAX_LANGUAGES_TO_TEST) || 3; // Test only 3 languages for speed (was 11)
+    // Multi-language detection settings - REAL-TIME (test only 2 most common languages)
+    this.maxLanguagesToTest = parseInt(process.env.MAX_LANGUAGES_TO_TEST) || 2; // Test only 2 languages for instant response (Hindi + English)
     // Hard caps to prevent runaway accumulation - Sarvam API has 30s limit for realtime endpoint
     // Use 25s to leave margin for processing delays and network latency
     this.maxBatchDurationMs = parseInt(process.env.MAX_BATCH_DURATION_MS) || 25000; // 25s hard cap (Sarvam limit: 30s)
