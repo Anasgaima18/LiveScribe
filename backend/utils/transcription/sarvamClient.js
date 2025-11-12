@@ -371,10 +371,10 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.duplicateWindowMs = options.duplicateWindowMs || 3000; // suppress duplicates within 3s
     this.genericFillers = options.genericFillers || ['yes', 'yeah', 'ya', 'ok', 'okay', 'hmm', 'uh', 'um'];
     this.hadSpeech = false;
-  this.minFlushBytes = options.minFlushBytes || 56000; // ~1.75s @ 16kHz (28000 samples) - Balanced for multi-language
+  this.minFlushBytes = options.minFlushBytes || 64000; // ~2s @ 16kHz (32000 samples) - Balanced for sequential API calls
     
-    // Batching configuration - REAL-TIME with ALL LANGUAGES
-    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 1500; // min 1.5s batch for multi-language processing
+    // Batching configuration - REAL-TIME with rate limit protection
+    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 2000; // min 2s batch allows sequential language testing
     this.batchStartTime = null;
     this.totalDurationMs = 0;
     this._chunkCount = 0;
@@ -393,8 +393,10 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.escalatedFlushBytes = parseInt(process.env.SARVAM_ESCALATED_FLUSH_BYTES) || 64000; // ~2s @ 16kHz - Better accuracy
     this.minSpeechFrames = parseInt(process.env.MIN_SPEECH_FRAMES) || 4; // MINIMAL: instant triggering (was 6)
     this.speechFrameCount = 0; // number of speech chunks in current batch
-    // Multi-language detection settings - ALL LANGUAGES for comprehensive support
-    this.maxLanguagesToTest = parseInt(process.env.MAX_LANGUAGES_TO_TEST) || 11; // Test all 11 Indian languages for maximum coverage
+    // Multi-language detection settings - BALANCED for rate limits
+    // Default to 5 languages (covers 80%+ users) to avoid rate limit issues
+    // Can be increased to 11 for maximum coverage if rate limits allow
+    this.maxLanguagesToTest = parseInt(process.env.MAX_LANGUAGES_TO_TEST) || 5; // Test 5 most common languages (Hi, En, Te, Ta, Mr)
     // Hard caps to prevent runaway accumulation - Sarvam API has 30s limit for realtime endpoint
     // Use 25s to leave margin for processing delays and network latency
     this.maxBatchDurationMs = parseInt(process.env.MAX_BATCH_DURATION_MS) || 25000; // 25s hard cap (Sarvam limit: 30s)
@@ -632,9 +634,20 @@ export class SarvamRealtimeClient extends EventEmitter {
             const languagesToTry = FALLBACK_LANGUAGE_PRIORITY.slice(0, numLanguages);
             logger.info(`[Batch ${batchId}] Testing ${numLanguages} languages: ${languagesToTry.join(', ')}`);
             
-            // Try all languages in parallel for speed
-            const transcriptionPromises = languagesToTry.map(async (lang) => {
+            // SEQUENTIAL language testing with rate limit handling (prevents 429 errors)
+            // Test languages one-by-one with delays to respect API rate limits
+            const allResults = [];
+            const delayBetweenRequests = parseInt(process.env.SARVAM_API_DELAY_MS) || 150; // 150ms delay = max 6-7 req/s
+            
+            for (let i = 0; i < languagesToTry.length; i++) {
+              const lang = languagesToTry[i];
+              
               try {
+                // Add delay between requests (except first one)
+                if (i > 0) {
+                  await new Promise(resolve => setTimeout(resolve, delayBetweenRequests));
+                }
+                
                 const langResult = await this.sttClient.transcribe(wavBuffer, { language: lang, withTimestamps: false });
                 const transcript = (langResult.transcript || '').trim();
                 
@@ -650,27 +663,60 @@ export class SarvamRealtimeClient extends EventEmitter {
                 
                 logger.debug(`[Batch ${batchId}] ${lang} result: "${transcript.substring(0, 50)}..." (words: ${wordCount}, chars: ${charCount}, quality: ${qualityScore.toFixed(0)})`);
                 
-                return {
+                allResults.push({
                   language: lang,
                   transcript: transcript,
                   wordCount: wordCount,
                   charCount: charCount,
                   qualityScore: qualityScore
-                };
+                });
+                
+                // EARLY EXIT: If we find a high-quality result, stop testing more languages
+                // This saves API calls and reduces latency significantly
+                if (qualityScore >= 100 && wordCount >= 5) {
+                  logger.info(`[Batch ${batchId}] Found high-quality match for ${lang} (quality: ${qualityScore.toFixed(0)}), stopping early`);
+                  break;
+                }
+                
               } catch (err) {
-                logger.debug(`[Batch ${batchId}] ${lang} transcription failed: ${err.message}`);
-                return {
+                // Check if it's a rate limit error (429)
+                const isRateLimit = err.message && err.message.includes('429');
+                if (isRateLimit) {
+                  logger.warn(`[Batch ${batchId}] Rate limit hit for ${lang}, waiting 2s before retry...`);
+                  await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s on rate limit
+                  
+                  // Retry once after rate limit
+                  try {
+                    const langResult = await this.sttClient.transcribe(wavBuffer, { language: lang, withTimestamps: false });
+                    const transcript = (langResult.transcript || '').trim();
+                    const words = transcript.split(/\s+/).filter(w => w.length > 0);
+                    const wordCount = words.length;
+                    const charCount = transcript.length;
+                    const qualityScore = (wordCount * 10) + (charCount * 0.3) + (transcript.length > 0 ? 20 : 0);
+                    
+                    allResults.push({
+                      language: lang,
+                      transcript: transcript,
+                      wordCount: wordCount,
+                      charCount: charCount,
+                      qualityScore: qualityScore
+                    });
+                  } catch (retryErr) {
+                    logger.warn(`[Batch ${batchId}] ${lang} retry failed: ${retryErr.message}`);
+                  }
+                } else {
+                  logger.debug(`[Batch ${batchId}] ${lang} transcription failed: ${err.message}`);
+                }
+                
+                // Add empty result for failed language
+                allResults.push({
                   language: lang,
                   transcript: '',
                   wordCount: 0,
-                  qualityScore: 0,
-                  avgWordLength: 0
-                };
+                  qualityScore: 0
+                });
               }
-            });
-            
-            // Wait for all attempts to complete
-            const allResults = await Promise.all(transcriptionPromises);
+            }
             
             // Filter out empty results and sort by quality score
             const validResults = allResults.filter(r => r.transcript.length > 0);
