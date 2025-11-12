@@ -640,14 +640,14 @@ export class SarvamRealtimeClient extends EventEmitter {
       
       // CRITICAL FIX: Audio normalization for low-volume audio
       // Sarvam API requires minimum -25dB for good transcription
-      // Current audio is too quiet (-39 to -43 dB), causing empty transcripts
+      // FIX: More aggressive normalization - normalize EARLIER to catch more quiet audio
       let normalizedBuffer = audioBuffer;
-      const targetRMS = 8000; // Target RMS ~-12dB for optimal Sarvam performance
-      const minRMSForNormalization = 500; // Normalize if below -36dB
+      const targetRMS = 6000; // Target RMS ~-14dB (slightly quieter to avoid distortion)
+      const minRMSForNormalization = 2000; // Normalize if below -26dB (was -36dB, too late)
       
       if (rms < minRMSForNormalization && rms > 0) {
         const amplificationFactor = targetRMS / rms;
-        const maxAmplification = 8.0; // Prevent excessive noise amplification
+        const maxAmplification = 6.0; // Reduced from 8.0 to avoid excessive noise
         const actualAmplification = Math.min(amplificationFactor, maxAmplification);
         
         logger.info(`[Batch ${batchId}] Audio too quiet (${rmsDb.toFixed(1)} dB), applying ${actualAmplification.toFixed(2)}x amplification`);
@@ -737,7 +737,18 @@ export class SarvamRealtimeClient extends EventEmitter {
                 }
                 
                 const langResult = await this.sttClient.transcribe(wavBuffer, { language: lang, withTimestamps: false });
-                const transcript = (langResult.transcript || '').trim();
+                let transcript = (langResult.transcript || '').trim();
+                
+                // FIX: Retry once if empty transcript (might be transient Sarvam API issue)
+                if (!transcript || transcript.length === 0) {
+                  logger.warn(`[Batch ${batchId}] ${lang} returned empty, retrying once after 500ms...`);
+                  await new Promise(resolve => setTimeout(resolve, 500));
+                  const retryResult = await this.sttClient.transcribe(wavBuffer, { language: lang, withTimestamps: false });
+                  transcript = (retryResult.transcript || '').trim();
+                  if (transcript.length > 0) {
+                    logger.info(`[Batch ${batchId}] ${lang} retry succeeded: "${transcript.substring(0, 30)}..."`);
+                  }
+                }
                 
                 // Calculate quality score - ENHANCED for better accuracy
                 const words = transcript.split(/\s+/).filter(w => w.length > 0);
@@ -864,7 +875,11 @@ export class SarvamRealtimeClient extends EventEmitter {
             validResults.sort((a, b) => b.qualityScore - a.qualityScore);
             
             if (validResults.length === 0) {
-              throw new Error('All language detection attempts returned empty transcripts');
+              // FIX: Log detailed diagnostics before throwing
+              logger.error(`[Batch ${batchId}] ALL ${allResults.length} languages returned empty transcripts`);
+              logger.error(`[Batch ${batchId}] Audio stats: RMS=${rms.toFixed(0)} (${rmsDb.toFixed(1)}dB), Peak=${peak}, Duration=${(audioBuffer.length/32000).toFixed(2)}s`);
+              logger.error(`[Batch ${batchId}] This indicates: 1) Audio is silence/noise, 2) Wrong audio format, or 3) Sarvam API issue`);
+              throw new Error('All language detection attempts returned empty transcripts - possible silence or audio format issue');
             }
             
             // Pick the best result
@@ -872,6 +887,8 @@ export class SarvamRealtimeClient extends EventEmitter {
             originalText = bestResult.transcript;
             detectedLang = bestResult.language;
             
+            // FIX: Log all top results for debugging
+            logger.info(`[Batch ${batchId}] Top 3 results: ${validResults.slice(0, 3).map(r => `${r.language}:${r.qualityScore.toFixed(0)}`).join(', ')}`);
             logger.info(`[Batch ${batchId}] Best match: ${detectedLang} (quality: ${bestResult.qualityScore.toFixed(0)}, words: ${bestResult.wordCount})`);
             logger.info(`[Batch ${batchId}] Detected text: "${originalText}"`);
             
@@ -925,20 +942,35 @@ export class SarvamRealtimeClient extends EventEmitter {
             this.translateErrorCount++;
             logger.error(`[Batch ${batchId}] Multi-language detection failed (count=${this.translateErrorCount}): ${e.message}`);
             
-            // Final fallback: try fallback language directly
-            try {
-              logger.info(`[Batch ${batchId}] Final fallback to ${this.fallbackLanguage}`);
-              result = await this.sttClient.transcribe(wavBuffer, { language: this.fallbackLanguage, withTimestamps: false });
-              result.language = result.language || this.fallbackLanguage;
-              originalText = result.transcript;
-              translatedText = null;
-            } catch (fallbackError) {
-              logger.error(`[Batch ${batchId}] Final fallback failed: ${fallbackError.message}`);
+            // FIX: Try MULTIPLE fallback languages (not just one)
+            const fallbackLanguages = [this.fallbackLanguage, 'en-IN', 'te-IN']; // Try Hindi, English, Telugu
+            let fallbackSuccess = false;
+            
+            for (const fallbackLang of fallbackLanguages) {
+              try {
+                logger.info(`[Batch ${batchId}] Attempting fallback to ${fallbackLang}`);
+                result = await this.sttClient.transcribe(wavBuffer, { language: fallbackLang, withTimestamps: false });
+                
+                if (result.transcript && result.transcript.trim().length > 0) {
+                  result.language = result.language || fallbackLang;
+                  originalText = result.transcript.trim();
+                  translatedText = null;
+                  fallbackSuccess = true;
+                  logger.info(`[Batch ${batchId}] Fallback to ${fallbackLang} succeeded: "${originalText.substring(0, 30)}..."`);
+                  break;
+                }
+              } catch (fallbackError) {
+                logger.warn(`[Batch ${batchId}] Fallback ${fallbackLang} failed: ${fallbackError.message}`);
+              }
+            }
+            
+            if (!fallbackSuccess) {
+              logger.error(`[Batch ${batchId}] ALL fallback attempts failed - audio may be silence or corrupted`);
               if (this.translateErrorCount >= this.maxTranslateErrors) {
                 this.degradedTranslate = true;
                 logger.warn('Max translate errors reached; degrading translation mode');
               }
-              throw fallbackError;
+              throw new Error('All transcription attempts failed including fallbacks - possible silence or audio corruption');
             }
           }
         }
