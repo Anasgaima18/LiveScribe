@@ -121,17 +121,17 @@ const VideoRoom = () => {
   const handleDisconnected = useCallback(() => {
     // Only log disconnections, don't navigate away
     // This allows LiveKit to reconnect automatically
-    console.log('[VideoRoom] Temporarily disconnected from LiveKit');
+    console.log('[VideoRoom] 🔄 Temporarily disconnected from LiveKit - Auto-reconnecting...');
     setIsConnected(false);
   }, []);
   
   const handleConnected = useCallback(() => {
+    console.log('[VideoRoom] ✅ Successfully connected to LiveKit room');
     setIsConnected(true);
     // Optionally auto-open transcripts panel for faster access
     if (import.meta.env.VITE_AUTO_OPEN_TRANSCRIPTS === 'true') {
       setShowTranscripts(true);
     }
-    console.log('[VideoRoom] ✅ Successfully connected to LiveKit room');
   }, []);
   
   const handleError = useCallback((error) => {
@@ -194,10 +194,13 @@ const VideoRoom = () => {
         onAccept={() => { setHasConsent(true); setShowConsent(false); }}
         onDecline={() => { setHasConsent(false); setShowConsent(false); }}
       />
+      
+      {/* Connection Status Indicators */}
       {!isConnected && (
         <div className="connection-status">
-          <p>🔄 Connecting to LiveKit server...</p>
-          <small>If this takes too long, the server may be inactive</small>
+          <div className="reconnecting-spinner"></div>
+          <p>🔄 Connecting to LiveKit...</p>
+          <small>Establishing secure peer-to-peer connection</small>
         </div>
       )}
       
@@ -264,8 +267,10 @@ const VideoRoom = () => {
           }}
         />
         
-        {/* Audio Controls - Hidden but functional */}
-        <StartAudio label="Click to Enable Audio" />
+        {/* Audio Controls - Auto-prompt for user interaction */}
+        <div style={{ position: 'absolute', top: '80px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000 }}>
+          <StartAudio label="🔊 Click to Enable Audio" />
+        </div>
         <RoomAudioRenderer />
         
         {/* Transcript Panel - Overlay on right */}
