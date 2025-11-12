@@ -371,10 +371,10 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.duplicateWindowMs = options.duplicateWindowMs || 3000; // suppress duplicates within 3s
     this.genericFillers = options.genericFillers || ['yes', 'yeah', 'ya', 'ok', 'okay', 'hmm', 'uh', 'um'];
     this.hadSpeech = false;
-  this.minFlushBytes = options.minFlushBytes || 51200; // ~1.6s @ 16kHz (25600 samples)
+  this.minFlushBytes = options.minFlushBytes || 102400; // ~3.2s @ 16kHz (51200 samples) - INCREASED for accuracy
     
-    // Batching configuration - increased to 800ms to reduce filler transcripts
-    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 800; // min 800ms batch
+    // Batching configuration - INCREASED to 2.5s minimum for better accuracy (more context)
+    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 2500; // min 2.5s batch (was 800ms)
     this.batchStartTime = null;
     this.totalDurationMs = 0;
     this._chunkCount = 0;
@@ -388,10 +388,10 @@ export class SarvamRealtimeClient extends EventEmitter {
     // Adaptive handling for repeated unknown / low-quality transcripts
     this.unknownStreak = 0; // consecutive unknown-language short transcripts
     this.maxUnknownStreak = parseInt(process.env.SARVAM_MAX_UNKNOWN_STREAK) || 3;
-    this.fallbackLanguage = process.env.SARVAM_FALLBACK_LANGUAGE || 'en-IN';
-    this.escalatedDurationMs = parseInt(process.env.SARVAM_ESCALATED_DURATION_MS) || 1600; // escalate to 1.6s if streak
-    this.escalatedFlushBytes = parseInt(process.env.SARVAM_ESCALATED_FLUSH_BYTES) || 76800; // ~2.4s @ 16kHz
-    this.minSpeechFrames = parseInt(process.env.MIN_SPEECH_FRAMES) || 4; // speech frames required before flush
+    this.fallbackLanguage = process.env.SARVAM_FALLBACK_LANGUAGE || 'hi-IN'; // Changed to Hindi for better accuracy
+    this.escalatedDurationMs = parseInt(process.env.SARVAM_ESCALATED_DURATION_MS) || 3200; // escalate to 3.2s if streak (was 1.6s)
+    this.escalatedFlushBytes = parseInt(process.env.SARVAM_ESCALATED_FLUSH_BYTES) || 102400; // ~3.2s @ 16kHz (was 2.4s)
+    this.minSpeechFrames = parseInt(process.env.MIN_SPEECH_FRAMES) || 8; // INCREASED: more speech frames required (was 4)
     this.speechFrameCount = 0; // number of speech chunks in current batch
     // Hard caps to prevent runaway accumulation - Sarvam API has 30s limit for realtime endpoint
     // Use 25s to leave margin for processing delays and network latency
@@ -609,6 +609,8 @@ export class SarvamRealtimeClient extends EventEmitter {
       // Multilingual dual-mode: when language is 'auto', get BOTH original and translated text
       const dualMode = this.language === 'auto' && process.env.MULTILINGUAL_MODE !== 'false';
       
+      // NEW STRATEGY: Use direct transcription with language hints instead of translate API
+      // The translate API has poor accuracy. Better to transcribe in native language first.
       if (this.language === 'auto') {
         if (this.degradedTranslate) {
           // Degraded path: first attempt plain transcribe with fallbackLanguage to get original text
@@ -618,83 +620,71 @@ export class SarvamRealtimeClient extends EventEmitter {
           originalText = result.transcript;
         } else {
           try {
-            // Get translated text (in English) - this should auto-detect language
-            const translateResult = await this.sttClient.transcribeAndTranslate(wavBuffer, { withTimestamps: false });
-            translatedText = translateResult.transcript;
-            detectedLang = translateResult.detectedLanguage || 'unknown';
-            logger.info(`Auto-detected language from translate API: ${detectedLang}, translated text: "${translatedText}"`);
+            // NEW APPROACH: Try Hindi first (most common), then get English translation separately
+            logger.info(`[Batch ${batchId}] Attempting direct transcription with Hindi (hi-IN) for better accuracy`);
+            const hindiResult = await this.sttClient.transcribe(wavBuffer, { language: 'hi-IN', withTimestamps: false });
+            originalText = hindiResult.transcript;
+            detectedLang = 'hi-IN';
             
-            // If dual-mode is enabled, try to get original text in source language
-            if (dualMode && translatedText && translatedText.length > 0) {
+            logger.info(`[Batch ${batchId}] Hindi transcription: "${originalText}" (length: ${originalText ? originalText.length : 0})`);
+            
+            // If we got valid Hindi text and dual-mode is enabled, translate it
+            if (dualMode && originalText && originalText.trim().length > 0) {
               try {
-                let originalLang = detectedLang;
+                // Use Sarvam's text translation API for accurate translation
+                logger.info(`[Batch ${batchId}] Translating Hindi text to English`);
+                const { translateText } = await import('../translationService.js');
+                translatedText = await translateText(originalText, 'hi-IN', 'en-IN');
+                logger.info(`[Batch ${batchId}] Translation: "${translatedText}"`);
                 
-                // If language is unknown or English, try Hindi first (most common Indian language)
-                // The translate API returns English translation, so if it detected "unknown" 
-                // it likely means non-English source that wasn't properly identified
-                if (detectedLang === 'unknown') {
-                  logger.info(`Dual-mode: language unknown, trying primary Indian language (${FALLBACK_LANGUAGE_PRIORITY[0]})`);
-                  originalLang = FALLBACK_LANGUAGE_PRIORITY[0]; // Hindi
-                } else if (detectedLang === 'en-IN') {
-                  // If detected as English but we have translation, it might be code-mixed
-                  // Try Hindi for original to see if we get different result
-                  logger.info(`Dual-mode: detected as English, checking for code-mixing with Hindi`);
-                  originalLang = 'hi-IN';
-                } else {
-                  logger.info(`Dual-mode: fetching original text in detected language ${detectedLang}`);
-                }
-                
-                // Re-use the same WAV buffer for original text fetch
-                logger.debug(`[Batch ${batchId}] Fetching original text - WAV buffer size: ${wavBuffer.length} bytes, target language: ${originalLang}`);
-                const originalResult = await this.sttClient.transcribe(wavBuffer, { language: originalLang, withTimestamps: false });
-                originalText = originalResult.transcript;
-                logger.info(`[Batch ${batchId}] Original text in ${originalLang}: "${originalText}" (length: ${originalText ? originalText.length : 0})`);
-                
-                // Check if the original transcription failed silently
-                if (!originalText || originalText.trim().length === 0) {
-                  logger.warn(`[Batch ${batchId}] Empty original text received for language ${originalLang} - audio may be incompatible or API throttled`);
-                }
-                
-                // If original and translated are very similar (English input), skip dual display
-                if (originalText && translatedText) {
+                // Check similarity to avoid showing same text twice
+                if (translatedText && originalText) {
                   const similarity = this._calculateSimilarity(originalText.toLowerCase(), translatedText.toLowerCase());
                   if (similarity > 0.8) {
-                    logger.info(`Original and translated text are ${(similarity * 100).toFixed(0)}% similar - likely English input, skipping dual-mode`);
-                    originalText = null; // Don't show dual mode for English
+                    logger.info(`[Batch ${batchId}] Texts are ${(similarity * 100).toFixed(0)}% similar - likely English, skipping dual-mode`);
                     translatedText = null;
+                    originalText = null;
                     detectedLang = 'en-IN';
                   } else {
-                    logger.info(`Dual-mode activated: original differs from translation (similarity: ${(similarity * 100).toFixed(0)}%)`);
-                    // Update detected language if it was unknown
-                    if (detectedLang === 'unknown') {
-                      detectedLang = originalLang;
-                    }
+                    logger.info(`[Batch ${batchId}] Dual-mode activated: original differs from translation (similarity: ${(similarity * 100).toFixed(0)}%)`);
                   }
                 }
-              } catch (origError) {
-                logger.warn(`Failed to get original text: ${origError.message}`);
-                // Continue with just translated text
+              } catch (transError) {
+                logger.warn(`[Batch ${batchId}] Translation failed: ${transError.message}`);
+                // Continue with just original text
+                translatedText = null;
               }
             }
             
-            // Use translated text as primary result for now
+            // Use original Hindi text as primary result
             result = {
-              transcript: translatedText,
+              transcript: translatedText || originalText, // Use translation if available, else original
               language: detectedLang,
               timestamp: Date.now()
             };
             
           } catch (e) {
             this.translateErrorCount++;
-            logger.error(`translateAndTranslate failed (count=${this.translateErrorCount}): ${e.message}`);
-            if (this.translateErrorCount >= this.maxTranslateErrors) {
-              this.degradedTranslate = true;
-              logger.warn('Max translate errors reached; degrading translation mode to plain transcription');
+            logger.error(`[Batch ${batchId}] Hindi transcription failed (count=${this.translateErrorCount}): ${e.message}`);
+            
+            // Fallback: try English
+            try {
+              logger.info(`[Batch ${batchId}] Falling back to English transcription`);
+              result = await this.sttClient.transcribe(wavBuffer, { language: 'en-IN', withTimestamps: false });
+              result.language = result.language || 'en-IN';
+              originalText = result.transcript;
+              translatedText = null; // No translation needed for English
+            } catch (enError) {
+              logger.error(`[Batch ${batchId}] All transcription attempts failed: ${enError.message}`);
+              if (this.translateErrorCount >= this.maxTranslateErrors) {
+                this.degradedTranslate = true;
+                logger.warn('Max translate errors reached; degrading translation mode');
+              }
+              // Final fallback
+              result = await this.sttClient.transcribe(wavBuffer, { language: this.fallbackLanguage, withTimestamps: false });
+              result.language = result.language || this.fallbackLanguage;
+              originalText = result.transcript;
             }
-            // Fallback to plain transcribe attempt
-            result = await this.sttClient.transcribe(wavBuffer, { language: this.fallbackLanguage, withTimestamps: false });
-            result.language = result.language || this.fallbackLanguage;
-            originalText = result.transcript;
           }
         }
       } else {
