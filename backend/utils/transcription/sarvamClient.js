@@ -413,13 +413,13 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.duplicateWindowMs = options.duplicateWindowMs || 3000; // suppress duplicates within 3s
     this.genericFillers = options.genericFillers || ['yes', 'yeah', 'ya', 'ok', 'okay', 'hmm', 'uh', 'um'];
     this.hadSpeech = false;
-  // CRITICAL FIX: Increased batch size for better Sarvam transcription quality
-    // Sarvam API works best with 2-5 seconds of continuous audio
-    // Too short = empty transcripts, too long = high latency
-    this.minFlushBytes = options.minFlushBytes || 96000; // ~3s @ 16kHz (48000 samples) - Optimal for Sarvam
+  // CRITICAL FIX FOR ACCURACY: Longer batches = better context = more accurate transcription
+    // Sarvam AI needs 4-6 seconds for BEST accuracy (captures complete sentences/phrases)
+    // Short batches (<3s) = fragmented speech = poor context = wrong transcription
+    this.minFlushBytes = options.minFlushBytes || 128000; // ~4s @ 16kHz (64000 samples) - BEST for accuracy
     
-    // Batching configuration - BALANCED for quality and latency
-    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 3000; // min 3s batch for better transcription accuracy
+    // Batching configuration - OPTIMIZED for MAXIMUM ACCURACY
+    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 4000; // min 4s batch for complete phrase context
     this.batchStartTime = null;
     this.totalDurationMs = 0;
     this._chunkCount = 0;
@@ -438,10 +438,10 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.escalatedFlushBytes = parseInt(process.env.SARVAM_ESCALATED_FLUSH_BYTES) || 64000; // ~2s @ 16kHz - Better accuracy
     this.minSpeechFrames = parseInt(process.env.MIN_SPEECH_FRAMES) || 4; // MINIMAL: instant triggering (was 6)
     this.speechFrameCount = 0; // number of speech chunks in current batch
-    // Multi-language detection settings - BALANCED for rate limits
-    // Default to 5 languages (covers 80%+ users) to avoid rate limit issues
-    // Can be increased to 11 for maximum coverage if rate limits allow
-    this.maxLanguagesToTest = parseInt(process.env.MAX_LANGUAGES_TO_TEST) || 5; // Test 5 most common languages (Hi, En, Te, Ta, Mr)
+    // Multi-language detection settings - INCREASED for MAXIMUM ACCURACY
+    // Testing 8 languages (90%+ coverage) with sequential processing to avoid rate limits
+    // More languages = better chance of correct detection = accurate transcription
+    this.maxLanguagesToTest = parseInt(process.env.MAX_LANGUAGES_TO_TEST) || 8; // Test 8 languages for best accuracy (Hi, En, Te, Ta, Mr, Gu, Kn, Bn)
     // Hard caps to prevent runaway accumulation - Sarvam API has 30s limit for realtime endpoint
     // Use 25s to leave margin for processing delays and network latency
     this.maxBatchDurationMs = parseInt(process.env.MAX_BATCH_DURATION_MS) || 25000; // 25s hard cap (Sarvam limit: 30s)
@@ -725,7 +725,7 @@ export class SarvamRealtimeClient extends EventEmitter {
             // SEQUENTIAL language testing with rate limit handling (prevents 429 errors)
             // Test languages one-by-one with delays to respect API rate limits
             const allResults = [];
-            const delayBetweenRequests = parseInt(process.env.SARVAM_API_DELAY_MS) || 150; // 150ms delay = max 6-7 req/s
+            const delayBetweenRequests = parseInt(process.env.SARVAM_API_DELAY_MS) || 100; // 100ms delay = max 10 req/s (still safe)
             
             for (let i = 0; i < languagesToTry.length; i++) {
               const lang = languagesToTry[i];
@@ -761,9 +761,15 @@ export class SarvamRealtimeClient extends EventEmitter {
                 if (hasNoRepeats) qualityScore += 20;
                 if (transcript.length > 0) qualityScore += 10;
                 
-                // Penalty for suspicious patterns
-                if (wordCount === 1 && charCount > 30) qualityScore *= 0.5; // Single long word = suspicious
-                if (avgWordLength < 2 || avgWordLength > 20) qualityScore *= 0.7; // Unusual word lengths
+                // ENHANCED PENALTY for gibberish/wrong language detection
+                if (wordCount === 1 && charCount > 30) qualityScore *= 0.3; // Single long word = likely gibberish
+                if (avgWordLength < 2 || avgWordLength > 20) qualityScore *= 0.4; // Unusual word lengths = suspicious
+                if (wordCount < 3 && charCount > 50) qualityScore *= 0.2; // Few words but many chars = gibberish
+                
+                // Check for common patterns of wrong language transcription
+                const hasOnlyRepeatedChars = /^(.)\1{4,}/.test(transcript); // "aaaaa" pattern
+                const hasRandomConsonants = /[bcdfghjklmnpqrstvwxyz]{6,}/i.test(transcript); // Too many consonants
+                if (hasOnlyRepeatedChars || hasRandomConsonants) qualityScore *= 0.1; // Severe penalty
                 
                 logger.debug(`[Batch ${batchId}] ${lang} result: "${transcript.substring(0, 50)}..." (words: ${wordCount}, chars: ${charCount}, avg: ${avgWordLength.toFixed(1)}, quality: ${qualityScore.toFixed(0)})`);
                 
@@ -776,11 +782,32 @@ export class SarvamRealtimeClient extends EventEmitter {
                   qualityScore: qualityScore
                 });
                 
-                // EARLY EXIT: If we find a high-quality result, stop testing more languages
+                // LANGUAGE-SPECIFIC VALIDATION - Check if transcript matches expected language patterns
+                let languageMatchBonus = 0;
+                if (lang === 'en-IN') {
+                  // English should have mostly ASCII characters
+                  const asciiRatio = (transcript.match(/[a-zA-Z\s]/g) || []).length / transcript.length;
+                  if (asciiRatio > 0.8) languageMatchBonus = 30; // Strong English indicator
+                } else if (lang === 'hi-IN') {
+                  // Hindi should have Devanagari script (Unicode range \u0900-\u097F)
+                  const devanagariRatio = (transcript.match(/[\u0900-\u097F]/g) || []).length / transcript.length;
+                  if (devanagariRatio > 0.5) languageMatchBonus = 30; // Strong Hindi indicator
+                } else if (lang === 'te-IN') {
+                  // Telugu script (Unicode range \u0C00-\u0C7F)
+                  const teluguRatio = (transcript.match(/[\u0C00-\u0C7F]/g) || []).length / transcript.length;
+                  if (teluguRatio > 0.5) languageMatchBonus = 30;
+                } else if (lang === 'ta-IN') {
+                  // Tamil script (Unicode range \u0B80-\u0BFF)
+                  const tamilRatio = (transcript.match(/[\u0B80-\u0BFF]/g) || []).length / transcript.length;
+                  if (tamilRatio > 0.5) languageMatchBonus = 30;
+                }
+                qualityScore += languageMatchBonus;
+                
+                // EARLY EXIT: If we find a VERY high-quality result with language match, stop testing more languages
                 // This saves API calls and reduces latency significantly
-                // Increased threshold to 150 for better accuracy (was 100)
-                if (qualityScore >= 150 && wordCount >= 5 && hasNoRepeats) {
-                  logger.info(`[Batch ${batchId}] Found high-quality match for ${lang} (quality: ${qualityScore.toFixed(0)}), stopping early`);
+                // Increased threshold to 180 for better accuracy (was 150) + language validation
+                if (qualityScore >= 180 && wordCount >= 5 && hasNoRepeats && languageMatchBonus > 0) {
+                  logger.info(`[Batch ${batchId}] Found EXCELLENT match for ${lang} (quality: ${qualityScore.toFixed(0)}, lang bonus: ${languageMatchBonus}), stopping early`);
                   break;
                 }
                 
