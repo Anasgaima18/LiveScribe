@@ -371,17 +371,17 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.duplicateWindowMs = options.duplicateWindowMs || 3000; // suppress duplicates within 3s
     this.genericFillers = options.genericFillers || ['yes', 'yeah', 'ya', 'ok', 'okay', 'hmm', 'uh', 'um'];
     this.hadSpeech = false;
-  this.minFlushBytes = options.minFlushBytes || 102400; // ~3.2s @ 16kHz (51200 samples) - INCREASED for accuracy
+  this.minFlushBytes = options.minFlushBytes || 153600; // ~4.8s @ 16kHz (76800 samples) - INCREASED for complete sentences
     
-    // Batching configuration - INCREASED to 2.5s minimum for better accuracy (more context)
-    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 2500; // min 2.5s batch (was 800ms)
+    // Batching configuration - INCREASED to 4s minimum for better word-level accuracy
+    this.minBatchDurationMs = parseInt(process.env.MIN_BATCH_DURATION_MS) || 4000; // min 4s batch for complete context
     this.batchStartTime = null;
     this.totalDurationMs = 0;
     this._chunkCount = 0;
     this._droppedChunks = 0;
     
     // Minimum word count to accept transcript (reject short filler responses)
-    this.minWordCount = parseInt(process.env.MIN_WORD_COUNT) || 3; // require at least 3 words
+    this.minWordCount = parseInt(process.env.MIN_WORD_COUNT) || 2; // accept 2+ words (lowered from 3)
     
     this.debugCapture = (process.env.DEBUG_AUDIO_CAPTURE === 'true');
 
@@ -389,9 +389,9 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.unknownStreak = 0; // consecutive unknown-language short transcripts
     this.maxUnknownStreak = parseInt(process.env.SARVAM_MAX_UNKNOWN_STREAK) || 3;
     this.fallbackLanguage = process.env.SARVAM_FALLBACK_LANGUAGE || 'hi-IN'; // Changed to Hindi for better accuracy
-    this.escalatedDurationMs = parseInt(process.env.SARVAM_ESCALATED_DURATION_MS) || 3200; // escalate to 3.2s if streak (was 1.6s)
-    this.escalatedFlushBytes = parseInt(process.env.SARVAM_ESCALATED_FLUSH_BYTES) || 102400; // ~3.2s @ 16kHz (was 2.4s)
-    this.minSpeechFrames = parseInt(process.env.MIN_SPEECH_FRAMES) || 8; // INCREASED: more speech frames required (was 4)
+    this.escalatedDurationMs = parseInt(process.env.SARVAM_ESCALATED_DURATION_MS) || 5000; // escalate to 5s for complete sentences
+    this.escalatedFlushBytes = parseInt(process.env.SARVAM_ESCALATED_FLUSH_BYTES) || 153600; // ~4.8s @ 16kHz for full context
+    this.minSpeechFrames = parseInt(process.env.MIN_SPEECH_FRAMES) || 12; // INCREASED: require more speech for quality (was 8)
     this.speechFrameCount = 0; // number of speech chunks in current batch
     // Multi-language detection settings
     this.maxLanguagesToTest = parseInt(process.env.MAX_LANGUAGES_TO_TEST) || 5; // Test top N languages (1-11, default 5 for speed)
@@ -643,16 +643,20 @@ export class SarvamRealtimeClient extends EventEmitter {
                 const wordCount = words.length;
                 const avgWordLength = words.reduce((sum, w) => sum + w.length, 0) / (wordCount || 1);
                 const hasValidScript = transcript.length > 0;
+                const charCount = transcript.length;
                 
-                // Quality score: longer transcripts with more words are likely more accurate
-                const qualityScore = wordCount * 10 + avgWordLength * 2 + (hasValidScript ? 20 : 0);
+                // Enhanced quality score: favor longer transcripts with more words and characters
+                // Formula: (words × 15) + (chars × 0.5) + (avg_word_length × 3) + bonus
+                // This ensures complete sentences score much higher than fragments
+                const qualityScore = (wordCount * 15) + (charCount * 0.5) + (avgWordLength * 3) + (hasValidScript ? 30 : 0);
                 
-                logger.debug(`[Batch ${batchId}] ${lang} result: "${transcript.substring(0, 50)}..." (words: ${wordCount}, quality: ${qualityScore.toFixed(0)})`);
+                logger.debug(`[Batch ${batchId}] ${lang} result: "${transcript.substring(0, 50)}..." (words: ${wordCount}, chars: ${charCount}, quality: ${qualityScore.toFixed(0)})`);
                 
                 return {
                   language: lang,
                   transcript: transcript,
                   wordCount: wordCount,
+                  charCount: charCount,
                   qualityScore: qualityScore,
                   avgWordLength: avgWordLength
                 };
