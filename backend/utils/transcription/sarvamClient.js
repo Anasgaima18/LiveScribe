@@ -692,13 +692,15 @@ export class SarvamRealtimeClient extends EventEmitter {
             if (detectedLang !== 'en-IN' && originalText && originalText.trim().length > 0) {
               try {
                 // Use Sarvam's text translation API for accurate translation
-                logger.info(`[Batch ${batchId}] Auto-translating ${detectedLang} to English`);
-                const { translateText } = await import('../translationService.js');
-                translatedText = await translateText(originalText, detectedLang, 'en-IN');
-                logger.info(`[Batch ${batchId}] English translation: "${translatedText}"`);
-                
-                // Validate translation quality
-                if (!translatedText || translatedText.trim().length === 0) {
+              logger.info(`[Batch ${batchId}] Auto-translating ${detectedLang} to English`);
+              const { translateText } = await import('../translationService.js');
+              // translateText(text, targetLang, sourceLang) returns {translatedText, ...}
+              const translationResult = await translateText(originalText, 'en-IN', detectedLang);
+              translatedText = translationResult.translatedText; // Extract the text property
+              logger.info(`[Batch ${batchId}] English translation: "${translatedText}"`);
+              
+              // Validate translation quality
+              if (!translatedText || typeof translatedText !== 'string' || translatedText.trim().length === 0) {
                   logger.warn(`[Batch ${batchId}] Translation returned empty - using original text`);
                   translatedText = originalText; // Fallback to original if translation fails
                 } else {
