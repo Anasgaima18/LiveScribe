@@ -18,7 +18,7 @@ import EventEmitter from 'events';
 import logger from '../../config/logger.js';
 import AudioQualityAnalyzer, { formatQualityMetrics } from './audioQualityAnalyzer.js';
 import PerformanceMonitor from './performanceMonitor.js';
-import { getConfig, AUDIO_SPECS, FALLBACK_LANGUAGE_PRIORITY as FALLBACK_LANGS } from './sarvamConfig.js';
+import { getConfig, AUDIO_SPECS, LANGUAGE_DETECTION } from './sarvamConfig.js';
 
 const SARVAM_BASE_URL = 'https://api.sarvam.ai';
 
@@ -30,8 +30,8 @@ const SUPPORTED_LANGUAGES = [
 ];
 
 // Common Indian languages for fallback attempts (ordered by usage)
-// Imported from sarvamConfig.js for centralized configuration
-const FALLBACK_LANGUAGE_PRIORITY = FALLBACK_LANGS;
+// Use priority order from centralized configuration
+const FALLBACK_LANGUAGE_PRIORITY = LANGUAGE_DETECTION.PRIORITY_ORDER;
 
 // Max file size for Sarvam API (10MB limit)
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
