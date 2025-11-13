@@ -283,13 +283,29 @@ export class SarvamSTTClient {
                               response.data.source_language ||
                               'unknown';
 
+      // CRITICAL FIX: Validate response structure before returning
+      if (!response || !response.data) {
+        logger.error('Sarvam transcribe+translate returned invalid response (no data)');
+        return null;
+      }
+
+      const transcript = response.data.transcript || '';
+      
+      // Return null for empty transcripts to signal caller to handle
+      if (!transcript || transcript.trim().length === 0) {
+        logger.warn('Sarvam transcribe+translate returned empty transcript');
+        return null;
+      }
+
       return {
-        transcript: response.data.transcript || '',
+        transcript: transcript,
         detectedLanguage: detectedLanguage,
         timestamp: Date.now(),
       };
     } catch (error) {
-      throw this._handleError(error, 'transcribeAndTranslate');
+      logger.error('Sarvam transcribe+translate error:', error.message);
+      // Return null instead of throwing to allow graceful fallback
+      return null;
     }
   }
 
@@ -788,20 +804,22 @@ export class SarvamRealtimeClient extends EventEmitter {
             model: this.preflightModel,
             enablePreprocessing: true 
           });
-          // CRITICAL FIX: Validate response structure before accessing properties
-          if (pre && typeof pre === 'object' && pre.transcript) {
+          // CRITICAL FIX: Handle null response gracefully (empty audio, API error, etc.)
+          if (pre && typeof pre === 'object' && pre.transcript && pre.transcript.trim().length > 0) {
             const norm = this._normalizeLanguageCode(pre.detectedLanguage);
-            if (pre.transcript.trim().length > 0 && norm) {
+            if (norm) {
               preflightDetectedLang = norm;
               logger.info(`[Batch ${batchId}] Preflight detected language: ${pre.detectedLanguage} -> ${norm}`);
             } else {
-              logger.debug(`[Batch ${batchId}] Preflight detection inconclusive (empty transcript)`);
+              logger.debug(`[Batch ${batchId}] Preflight language code could not be normalized: ${pre.detectedLanguage}`);
             }
+          } else if (pre === null) {
+            logger.debug(`[Batch ${batchId}] Preflight returned null (likely empty/silence)`);
           } else {
-            logger.warn(`[Batch ${batchId}] Preflight returned invalid response:`, pre);
+            logger.debug(`[Batch ${batchId}] Preflight detection inconclusive`);
           }
         } catch (pfErr) {
-          logger.warn(`[Batch ${batchId}] Preflight detect failed: ${pfErr.message}`);
+          logger.debug(`[Batch ${batchId}] Preflight detect exception: ${pfErr.message}`);
         }
       }
 
@@ -922,52 +940,93 @@ export class SarvamRealtimeClient extends EventEmitter {
                 }
                 
                 // ENHANCED LANGUAGE-SPECIFIC VALIDATION - ALL 11 languages with script detection
-                // Best detection requires validating each language's unique script
+                // CRITICAL: Detect and HEAVILY PENALIZE wrong script (e.g., Devanagari returned by Tamil API)
                 let languageMatchBonus = 0;
+                let wrongScriptPenalty = false;
+                
                 if (transcript.length > 0) {
+                  // Detect which script is actually present in the transcript
+                  const scriptRatios = {
+                    ascii: (transcript.match(/[a-zA-Z\s]/g) || []).length / transcript.length,
+                    devanagari: (transcript.match(/[\u0900-\u097F]/g) || []).length / transcript.length,  // Hindi/Marathi
+                    tamil: (transcript.match(/[\u0B80-\u0BFF]/g) || []).length / transcript.length,
+                    telugu: (transcript.match(/[\u0C00-\u0C7F]/g) || []).length / transcript.length,
+                    bengali: (transcript.match(/[\u0980-\u09FF]/g) || []).length / transcript.length,
+                    gujarati: (transcript.match(/[\u0A80-\u0AFF]/g) || []).length / transcript.length,
+                    kannada: (transcript.match(/[\u0C80-\u0CFF]/g) || []).length / transcript.length,
+                    malayalam: (transcript.match(/[\u0D00-\u0D7F]/g) || []).length / transcript.length,
+                    gurmukhi: (transcript.match(/[\u0A00-\u0A7F]/g) || []).length / transcript.length,  // Punjabi
+                    odia: (transcript.match(/[\u0B00-\u0B7F]/g) || []).length / transcript.length
+                  };
+                  
+                  // Validate script matches language
                   if (lang === 'en-IN') {
-                    // English should have mostly ASCII characters
-                    const asciiRatio = (transcript.match(/[a-zA-Z\s]/g) || []).length / transcript.length;
-                    if (asciiRatio > 0.8) languageMatchBonus = 35; // Strong English indicator
+                    if (scriptRatios.ascii > 0.8) languageMatchBonus = 35;
+                    // CRITICAL: English should NOT have Indic scripts
+                    if (scriptRatios.devanagari > 0.3 || scriptRatios.tamil > 0.3 || scriptRatios.telugu > 0.3) {
+                      wrongScriptPenalty = true;
+                      logger.warn(`[Batch ${batchId}] en-IN returned wrong script! deva=${(scriptRatios.devanagari*100).toFixed(0)}% ta=${(scriptRatios.tamil*100).toFixed(0)}% te=${(scriptRatios.telugu*100).toFixed(0)}%`);
+                    }
                   } else if (lang === 'hi-IN' || lang === 'mr-IN') {
-                    // Hindi/Marathi use Devanagari script (Unicode range \u0900-\u097F)
-                    const devanagariRatio = (transcript.match(/[\u0900-\u097F]/g) || []).length / transcript.length;
-                    if (devanagariRatio > 0.5) languageMatchBonus = 35; // Strong Devanagari indicator
+                    if (scriptRatios.devanagari > 0.5) languageMatchBonus = 35;
+                    // CRITICAL: Hindi should NOT have Tamil/Telugu scripts
+                    if (scriptRatios.tamil > 0.3 || scriptRatios.telugu > 0.3 || scriptRatios.kannada > 0.3) {
+                      wrongScriptPenalty = true;
+                      logger.warn(`[Batch ${batchId}] ${lang} returned wrong script! ta=${(scriptRatios.tamil*100).toFixed(0)}% te=${(scriptRatios.telugu*100).toFixed(0)}%`);
+                    }
                   } else if (lang === 'te-IN') {
-                    // Telugu script (Unicode range \u0C00-\u0C7F)
-                    const teluguRatio = (transcript.match(/[\u0C00-\u0C7F]/g) || []).length / transcript.length;
-                    if (teluguRatio > 0.5) languageMatchBonus = 35;
+                    if (scriptRatios.telugu > 0.5) languageMatchBonus = 35;
+                    if (scriptRatios.tamil > 0.3 || scriptRatios.devanagari > 0.3) {
+                      wrongScriptPenalty = true;
+                      logger.warn(`[Batch ${batchId}] te-IN returned wrong script! ta=${(scriptRatios.tamil*100).toFixed(0)}% deva=${(scriptRatios.devanagari*100).toFixed(0)}%`);
+                    }
                   } else if (lang === 'ta-IN') {
-                    // Tamil script (Unicode range \u0B80-\u0BFF)
-                    const tamilRatio = (transcript.match(/[\u0B80-\u0BFF]/g) || []).length / transcript.length;
-                    if (tamilRatio > 0.5) languageMatchBonus = 35;
+                    if (scriptRatios.tamil > 0.5) languageMatchBonus = 35;
+                    // CRITICAL: Tamil should NOT have Devanagari/Telugu scripts
+                    if (scriptRatios.devanagari > 0.3 || scriptRatios.telugu > 0.3 || scriptRatios.kannada > 0.3) {
+                      wrongScriptPenalty = true;
+                      logger.warn(`[Batch ${batchId}] ta-IN returned wrong script! deva=${(scriptRatios.devanagari*100).toFixed(0)}% (likely Hindi) te=${(scriptRatios.telugu*100).toFixed(0)}%`);
+                    }
                   } else if (lang === 'bn-IN') {
-                    // Bengali script (Unicode range \u0980-\u09FF)
-                    const bengaliRatio = (transcript.match(/[\u0980-\u09FF]/g) || []).length / transcript.length;
-                    if (bengaliRatio > 0.5) languageMatchBonus = 35;
+                    if (scriptRatios.bengali > 0.5) languageMatchBonus = 35;
+                    if (scriptRatios.devanagari > 0.3 || scriptRatios.tamil > 0.3) {
+                      wrongScriptPenalty = true;
+                    }
                   } else if (lang === 'gu-IN') {
-                    // Gujarati script (Unicode range \u0A80-\u0AFF)
-                    const gujaratiRatio = (transcript.match(/[\u0A80-\u0AFF]/g) || []).length / transcript.length;
-                    if (gujaratiRatio > 0.5) languageMatchBonus = 35;
+                    if (scriptRatios.gujarati > 0.5) languageMatchBonus = 35;
+                    if (scriptRatios.devanagari > 0.3) {
+                      wrongScriptPenalty = true;
+                    }
                   } else if (lang === 'kn-IN') {
-                    // Kannada script (Unicode range \u0C80-\u0CFF)
-                    const kannadaRatio = (transcript.match(/[\u0C80-\u0CFF]/g) || []).length / transcript.length;
-                    if (kannadaRatio > 0.5) languageMatchBonus = 35;
+                    if (scriptRatios.kannada > 0.5) languageMatchBonus = 35;
+                    if (scriptRatios.telugu > 0.3 || scriptRatios.tamil > 0.3) {
+                      wrongScriptPenalty = true;
+                    }
                   } else if (lang === 'ml-IN') {
-                    // Malayalam script (Unicode range \u0D00-\u0D7F)
-                    const malayalamRatio = (transcript.match(/[\u0D00-\u0D7F]/g) || []).length / transcript.length;
-                    if (malayalamRatio > 0.5) languageMatchBonus = 35;
+                    if (scriptRatios.malayalam > 0.5) languageMatchBonus = 35;
+                    if (scriptRatios.tamil > 0.3 || scriptRatios.kannada > 0.3) {
+                      wrongScriptPenalty = true;
+                    }
                   } else if (lang === 'pa-IN') {
-                    // Punjabi Gurmukhi script (Unicode range \u0A00-\u0A7F)
-                    const gurmukhiRatio = (transcript.match(/[\u0A00-\u0A7F]/g) || []).length / transcript.length;
-                    if (gurmukhiRatio > 0.5) languageMatchBonus = 35;
+                    if (scriptRatios.gurmukhi > 0.5) languageMatchBonus = 35;
+                    if (scriptRatios.devanagari > 0.3) {
+                      wrongScriptPenalty = true;
+                    }
                   } else if (lang === 'od-IN') {
-                    // Odia script (Unicode range \u0B00-\u0B7F)
-                    const odiaRatio = (transcript.match(/[\u0B00-\u0B7F]/g) || []).length / transcript.length;
-                    if (odiaRatio > 0.5) languageMatchBonus = 35;
+                    if (scriptRatios.odia > 0.5) languageMatchBonus = 35;
+                    if (scriptRatios.bengali > 0.3 || scriptRatios.devanagari > 0.3) {
+                      wrongScriptPenalty = true;
+                    }
                   }
                 }
-                qualityScore += languageMatchBonus;
+                
+                // Apply bonus or MASSIVE penalty
+                if (wrongScriptPenalty) {
+                  qualityScore *= 0.01; // 99% penalty for wrong script - essentially disqualifies this result
+                  logger.info(`[Batch ${batchId}] ${lang} DISQUALIFIED due to wrong script (quality reduced to ${qualityScore.toFixed(0)})`);
+                } else {
+                  qualityScore += languageMatchBonus;
+                }
                 
                 // EARLY EXIT: dynamic thresholds to reduce latency for short utterances
                 const strictScore = parseInt(process.env.EARLY_EXIT_STRICT_SCORE || '200');
@@ -1047,23 +1106,21 @@ export class SarvamRealtimeClient extends EventEmitter {
             
             if (validResults.length === 0) {
               // Try auto transcribe+translate as an additional fallback when all are empty
-              try {
-                logger.warn(`[Batch ${batchId}] All ${allResults.length} languages empty — trying transcribe+translate(auto) before backoff`);
-                const auto = await this.sttClient.transcribeAndTranslate(wavBuffer, { model: 'saaras:v2.5', enablePreprocessing: true });
-                const autoText = (auto.transcript || '').trim();
-                if (autoText.length > 0) {
-                  originalText = autoText;
-                  translatedText = autoText;
-                  detectedLang = this._normalizeLanguageCode(auto.detectedLanguage) || 'unknown';
-                  result = { transcript: translatedText, language: detectedLang, timestamp: Date.now() };
-                } else {
-                  throw new Error('auto transcribe+translate returned empty');
-                }
-              } catch (autoEmptyErr) {
+              logger.warn(`[Batch ${batchId}] All ${allResults.length} languages empty — trying transcribe+translate(auto) before backoff`);
+              const auto = await this.sttClient.transcribeAndTranslate(wavBuffer, { model: 'saaras:v2.5', enablePreprocessing: true });
+              
+              // CRITICAL FIX: Handle null response from transcribeAndTranslate
+              if (auto && auto.transcript && auto.transcript.trim().length > 0) {
+                originalText = auto.transcript.trim();
+                translatedText = originalText;
+                detectedLang = this._normalizeLanguageCode(auto.detectedLanguage) || 'unknown';
+                result = { transcript: translatedText, language: detectedLang, timestamp: Date.now() };
+                logger.info(`[Batch ${batchId}] Auto TT succeeded: "${translatedText.substring(0, 30)}..." (${detectedLang})`);
+              } else {
                 // No usable transcript yet; accumulate more audio and retry next flush
                 this.emptyBatchStreak++;
                 const backoffMs = Math.min(1500, 300 * this.emptyBatchStreak);
-                logger.warn(`[Batch ${batchId}] All languages empty after auto TT. Backing off ${backoffMs}ms and accumulating more audio (streak=${this.emptyBatchStreak})`);
+                logger.warn(`[Batch ${batchId}] All languages empty after auto TT (returned ${auto === null ? 'null' : 'empty'}). Backing off ${backoffMs}ms and accumulating more audio (streak=${this.emptyBatchStreak})`);
                 this.deferRetry = Date.now() + backoffMs;
                 this.processing = false;
                 // Do NOT clear buffers; keep accumulating for more context
