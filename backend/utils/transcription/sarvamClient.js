@@ -254,15 +254,14 @@ export class SarvamSTTClient {
       // Log request details
       logger.info(`Sarvam transcribe+translate request: size=${audioBuffer.length} bytes (auto-detect)`);
 
-      // Enable preprocessing for best quality
-      form.append('enable_preprocessing', String(options.enablePreprocessing !== undefined ? options.enablePreprocessing : true));
+      // CRITICAL: Enable preprocessing for best quality (must be string 'true' per Sarvam docs)
+      const enablePreprocessing = options.enablePreprocessing !== false;
+      form.append('enable_preprocessing', String(enablePreprocessing));
+      form.append('model', options.model || 'saaras:v2.5');
 
       const response = await this.client.post('/speech-to-text-translate', form, {
         headers: {
           ...form.getHeaders(),
-        },
-        params: {
-          model: options.model || 'saaras:v2.5',
         },
       });
 
@@ -669,26 +668,39 @@ export class SarvamRealtimeClient extends EventEmitter {
       const nonZeroPercent = ((nonZero / qualitySamples.length) * 100).toFixed(1);
       logger.info(`[Batch ${batchId}] Audio quality (original) - RMS: ${rms.toFixed(0)} (${rmsDb.toFixed(1)} dB), Peak: ${peak}, Non-zero: ${nonZeroPercent}%, Samples: ${qualitySamples.length}`);
       
-      // ULTIMATE AUDIO QUALITY: Aggressive normalization for BEST transcription results
+      // ULTIMATE AUDIO QUALITY: AGGRESSIVE normalization for BEST transcription results
       // Sarvam API performs BEST with audio at -15dB to -20dB range
-      // Normalize more audio to optimal range for maximum accuracy
+      // Industry standard: aim for -13dB RMS (7000 on Int16 scale)
       let normalizedBuffer = audioBuffer;
       const targetRMS = 7000; // Target RMS ~-13dB (optimal for Sarvam quality)
-      const minRMSForNormalization = 3000; // Normalize if below -22dB (more aggressive for quality)
+      const minRMSForNormalization = 4500; // Normalize if below -17dB (more aggressive threshold)
       
       if (rms < minRMSForNormalization && rms > 0) {
         const amplificationFactor = targetRMS / rms;
-        const maxAmplification = 5.0; // Conservative amplification to preserve quality
+        const maxAmplification = 10.0; // INCREASED: Allow more amplification for quiet audio
         const actualAmplification = Math.min(amplificationFactor, maxAmplification);
         
         logger.info(`[Batch ${batchId}] Audio too quiet (${rmsDb.toFixed(1)} dB), applying ${actualAmplification.toFixed(2)}x amplification`);
         
-        // Create normalized buffer
+        // Create normalized buffer with soft clipping for quality
         const normalizedSamples = new Int16Array(qualitySamples.length);
+        let clippedCount = 0;
         for (let i = 0; i < qualitySamples.length; i++) {
           const amplified = qualitySamples[i] * actualAmplification;
-          // Clamp to Int16 range to prevent clipping
-          normalizedSamples[i] = Math.max(-32768, Math.min(32767, amplified));
+          // Soft clipping: apply tanh-style compression for values near limits
+          let final = amplified;
+          if (Math.abs(amplified) > 28000) {
+            const sign = amplified >= 0 ? 1 : -1;
+            const absVal = Math.abs(amplified);
+            // Soft compress values between 28000 and 40000 into 28000-32767 range
+            final = sign * (28000 + (Math.tanh((absVal - 28000) / 6000) * 4767));
+            clippedCount++;
+          }
+          normalizedSamples[i] = Math.max(-32768, Math.min(32767, Math.round(final)));
+        }
+        
+        if (clippedCount > 0) {
+          logger.debug(`[Batch ${batchId}] Soft-clipped ${clippedCount} samples (${(clippedCount/qualitySamples.length*100).toFixed(1)}%)`);
         }
         
         normalizedBuffer = Buffer.from(normalizedSamples.buffer);
@@ -704,19 +716,38 @@ export class SarvamRealtimeClient extends EventEmitter {
         const normalizedRmsDb = 20 * Math.log10(normalizedRms / 32768);
         logger.info(`[Batch ${batchId}] Audio quality (normalized) - RMS: ${normalizedRms.toFixed(0)} (${normalizedRmsDb.toFixed(1)} dB), Peak: ${normalizedPeak}`);
 
-        // If still too quiet after normalization (< -22dB), apply gentle second pass up to 1.5x
-        if (normalizedRms < 3000) {
-          const secondPassFactor = Math.min(1.5, 3000 / Math.max(1, normalizedRms));
-          logger.info(`[Batch ${batchId}] Second-pass normalization x${secondPassFactor.toFixed(2)} to reach -22 dB`);
+        // CRITICAL FIX: If STILL too quiet after first pass (< -18dB), apply AGGRESSIVE second pass
+        if (normalizedRms < 4000) {
+          const secondPassTarget = 6500; // Target -14dB for very quiet audio
+          const secondPassFactor = Math.min(2.5, secondPassTarget / Math.max(1, normalizedRms));
+          logger.info(`[Batch ${batchId}] AGGRESSIVE second-pass x${secondPassFactor.toFixed(2)} to reach optimal -14 dB`);
           const secondSamples = new Int16Array(normalizedSamples.length);
           for (let i = 0; i < normalizedSamples.length; i++) {
             const amplified = normalizedSamples[i] * secondPassFactor;
-            secondSamples[i] = Math.max(-32768, Math.min(32767, amplified));
+            // Apply soft clipping again
+            let final = amplified;
+            if (Math.abs(amplified) > 28000) {
+              const sign = amplified >= 0 ? 1 : -1;
+              const absVal = Math.abs(amplified);
+              final = sign * (28000 + (Math.tanh((absVal - 28000) / 6000) * 4767));
+            }
+            secondSamples[i] = Math.max(-32768, Math.min(32767, Math.round(final)));
           }
           normalizedBuffer = Buffer.from(secondSamples.buffer);
+          
+          // Log final metrics
+          let finalSum = 0, finalPeak = 0;
+          for (let i = 0; i < secondSamples.length; i++) {
+            const v = Math.abs(secondSamples[i]);
+            finalSum += v * v;
+            if (v > finalPeak) finalPeak = v;
+          }
+          const finalRms = Math.sqrt(finalSum / secondSamples.length);
+          const finalDb = 20 * Math.log10(finalRms / 32768);
+          logger.info(`[Batch ${batchId}] Final audio - RMS: ${finalRms.toFixed(0)} (${finalDb.toFixed(1)} dB), Peak: ${finalPeak}`);
         }
       } else {
-        logger.debug(`[Batch ${batchId}] Audio quality sufficient, no normalization needed`);
+        logger.debug(`[Batch ${batchId}] Audio quality sufficient (${rmsDb.toFixed(1)} dB), no normalization needed`);
       }
       
       const wavBuffer = this._pcm16ToWav(normalizedBuffer, 16000, 1);
@@ -753,16 +784,24 @@ export class SarvamRealtimeClient extends EventEmitter {
           const headPcm = normalizedBuffer.subarray(0, headBytes);
           const headWav = this._pcm16ToWav(headPcm, 16000, 1);
           logger.info(`[Batch ${batchId}] Preflight detect on ${this.preflightSeconds.toFixed(1)}s head (${headBytes} bytes)`);
-          const pre = await this.sttClient.transcribeAndTranslate(headWav, { model: 'saaras:v2.5' });
-          const norm = this._normalizeLanguageCode(pre.detectedLanguage);
-          if (pre.transcript && pre.transcript.trim().length > 0 && norm) {
-            preflightDetectedLang = norm;
-            logger.info(`[Batch ${batchId}] Preflight detected language: ${pre.detectedLanguage} -> ${norm}`);
+          const pre = await this.sttClient.transcribeAndTranslate(headWav, { 
+            model: this.preflightModel,
+            enablePreprocessing: true 
+          });
+          // CRITICAL FIX: Validate response structure before accessing properties
+          if (pre && typeof pre === 'object' && pre.transcript) {
+            const norm = this._normalizeLanguageCode(pre.detectedLanguage);
+            if (pre.transcript.trim().length > 0 && norm) {
+              preflightDetectedLang = norm;
+              logger.info(`[Batch ${batchId}] Preflight detected language: ${pre.detectedLanguage} -> ${norm}`);
+            } else {
+              logger.debug(`[Batch ${batchId}] Preflight detection inconclusive (empty transcript)`);
+            }
           } else {
-            logger.debug(`[Batch ${batchId}] Preflight detection inconclusive`);
+            logger.warn(`[Batch ${batchId}] Preflight returned invalid response:`, pre);
           }
         } catch (pfErr) {
-          logger.debug(`[Batch ${batchId}] Preflight detect failed: ${pfErr.message}`);
+          logger.warn(`[Batch ${batchId}] Preflight detect failed: ${pfErr.message}`);
         }
       }
 
