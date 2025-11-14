@@ -170,7 +170,7 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
       // Small delay to ensure LiveKit connection is established
       const timer = setTimeout(() => {
         handleStart();
-      }, 2000);
+      }, 500); // Reduced from 2000ms for faster start
       return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

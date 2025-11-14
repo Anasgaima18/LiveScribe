@@ -106,6 +106,8 @@ app.use(cors({
     // Allow non-browser requests or same-origin
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
+    
+    logger.warn(`CORS blocked for origin: ${origin}. Allowed origins: ${allowedOrigins.join(', ')}`);
     return callback(new Error(`CORS blocked for origin: ${origin}`));
   },
   credentials: true,

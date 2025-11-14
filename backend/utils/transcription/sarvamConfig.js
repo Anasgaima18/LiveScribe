@@ -89,20 +89,20 @@ export const QUALITY_WEIGHTS = {
   CONSONANT_CLUSTER_PENALTY: 0.1, // Too many consonants
 };
 
-// Batching Strategy (Industry Best Practices)
+// Batching Strategy (Industry Best Practices - TUNED FOR LOW LATENCY)
 export const BATCHING_CONFIG = {
-  // Duration-based
-  MIN_BATCH_DURATION_MS: 5000,  // 5s minimum for context
-  MAX_BATCH_DURATION_MS: 25000, // 25s hard cap (Sarvam: 30s limit)
-  ESCALATED_DURATION_MS: 2000,  // 2s when quality is low
+  // Duration-based (REDUCED for realtime feel)
+  MIN_BATCH_DURATION_MS: 1200,  // ~1.2s minimum for realtime
+  MAX_BATCH_DURATION_MS: 15000, // 15s hard cap
+  ESCALATED_DURATION_MS: 800,   // 0.8s when quality is low
   
-  // Size-based
-  MIN_FLUSH_BYTES: 160000,      // ~5s @ 16kHz mono
-  ESCALATED_FLUSH_BYTES: 64000, // ~2s for quick retry
-  MAX_BATCH_BYTES: 800000,      // ~25s @ 16kHz mono
+  // Size-based (REDUCED for faster flush)
+  MIN_FLUSH_BYTES: 40000,       // ~1.2s @ 16kHz mono
+  ESCALATED_FLUSH_BYTES: 24000, // ~0.7s for quick retry
+  MAX_BATCH_BYTES: 400000,      // ~12s @ 16kHz mono
   
-  // Quality gates
-  MIN_SPEECH_FRAMES: 4,         // Minimum speech frames
+  // Quality gates (RELAXED for short utterances)
+  MIN_SPEECH_FRAMES: 2,         // Minimum speech frames
   MIN_WORD_COUNT: 1,            // Minimum words to accept
   
   // Adaptive backoff
@@ -176,7 +176,7 @@ export const MODES = {
   SPEED: {
     name: 'speed',
     maxLanguages: LANGUAGE_DETECTION.MAX_LANGUAGES_SPEED,
-    minBatchDuration: 3000,
+    minBatchDuration: 1200, // Realtime optimized
     earlyExitScore: LANGUAGE_DETECTION.ENGLISH_FAST_PATH_SCORE,
     enablePreflight: true,
     enableTTGuard: false,
