@@ -482,6 +482,15 @@ export class SarvamRealtimeClient extends EventEmitter {
     this.emptyBreakThreshold = this.config.emptyBreakThreshold;
     this.lastDetectedLanguage = null;
     
+    // SMART LANGUAGE CACHING: Remember recent successful languages
+    this.languageCache = {
+      lastLanguage: null,
+      lastQuality: 0,
+      successCount: 0,
+      cacheHits: 0,
+      totalDetections: 0
+    };
+    
     // Translation error tracking
     this.translateErrorCount = 0;
     this.maxTranslateErrors = 3;
@@ -843,12 +852,19 @@ export class SarvamRealtimeClient extends EventEmitter {
             const numLanguages = Math.min(this.maxLanguagesToTest, FALLBACK_LANGUAGE_PRIORITY.length);
             const baseList = FALLBACK_LANGUAGE_PRIORITY.slice(0, numLanguages);
             const prioritized = [];
+            
+            // SMART PRIORITIZATION: Use cached language first if recent and successful
+            if (this.languageCache.lastLanguage && this.languageCache.successCount >= 2) {
+              prioritized.push(this.languageCache.lastLanguage);
+              logger.debug(`[Batch ${batchId}] Prioritizing cached language: ${this.languageCache.lastLanguage} (${this.languageCache.successCount} consecutive hits)`);
+            }
+            
             if (this.lastDetectedLanguage) prioritized.push(this.lastDetectedLanguage);
             if (preflightDetectedLang) prioritized.push(preflightDetectedLang);
             // Always include English early for short utterances
             prioritized.push('en-IN');
             const fullList = [...new Set([...prioritized, ...baseList])];
-            const speedCap = parseInt(process.env.SPEED_MAX_LANGUAGES || '6');
+            const speedCap = parseInt(process.env.SPEED_MAX_LANGUAGES || '2'); // Reduced default from 6 to 2
             const cap = this.latencyMode === 'speed' ? Math.min(fullList.length, speedCap) : fullList.length;
             const languagesToTry = fullList.slice(0, cap);
             logger.info(`[Batch ${batchId}] Testing ${languagesToTry.length} languages: ${languagesToTry.join(', ')}`);
@@ -872,10 +888,11 @@ export class SarvamRealtimeClient extends EventEmitter {
                 const langResult = await this.sttClient.transcribe(wavBuffer, { language: lang, withTimestamps: false });
                 let transcript = (langResult.transcript || '').trim();
                 
-                // FIX: Retry once if empty transcript (might be transient Sarvam API issue)
-                if (!transcript || transcript.length === 0) {
-                  logger.warn(`[Batch ${batchId}] ${lang} returned empty, retrying once after 500ms...`);
-                  await new Promise(resolve => setTimeout(resolve, 500));
+                // SPEED OPTIMIZATION: Only retry if explicitly enabled and empty count is low
+                const shouldRetryEmpty = this.config.preflight.enabled && consecutiveEmpties < 1;
+                if ((!transcript || transcript.length === 0) && shouldRetryEmpty) {
+                  logger.warn(`[Batch ${batchId}] ${lang} returned empty, retrying once after 300ms...`);
+                  await new Promise(resolve => setTimeout(resolve, 300)); // Reduced from 500ms
                   const retryResult = await this.sttClient.transcribe(wavBuffer, { language: lang, withTimestamps: false });
                   transcript = (retryResult.transcript || '').trim();
                   if (transcript.length > 0) {
@@ -884,6 +901,10 @@ export class SarvamRealtimeClient extends EventEmitter {
                   } else {
                     consecutiveEmpties++;
                   }
+                } else if (!transcript || transcript.length === 0) {
+                  consecutiveEmpties++;
+                  // Skip this result entirely - don't add to allResults
+                  continue;
                 }
                 
                 // Calculate quality score - ENHANCED for better accuracy
@@ -932,6 +953,13 @@ export class SarvamRealtimeClient extends EventEmitter {
                   avgWordLength: avgWordLength,
                   qualityScore: qualityScore
                 });
+
+                // SPEED OPTIMIZATION: Early exit if we have a very good result
+                // Don't waste time testing more languages if we already have high confidence
+                if (qualityScore >= this.config.earlyExitScore && wordCount >= 1) {
+                  logger.info(`[Batch ${batchId}] Early exit (high confidence) for ${lang} (quality: ${qualityScore.toFixed(0)}, words: ${wordCount}, bonus: ${languageMatchBonus})`);
+                  break;
+                }
 
                 // Early break if too many empties in a row (likely silence/too quiet or wrong batch)
                 if (consecutiveEmpties >= emptyBreakThreshold) {
@@ -1103,6 +1131,32 @@ export class SarvamRealtimeClient extends EventEmitter {
             // Filter out empty results and sort by quality score
             const validResults = allResults.filter(r => r.transcript.length > 0);
             validResults.sort((a, b) => b.qualityScore - a.qualityScore);
+            
+            // Update language cache with best result
+            if (validResults.length > 0) {
+              const bestResult = validResults[0];
+              this.languageCache.totalDetections++;
+              
+              // Cache language if quality is good enough
+              if (bestResult.qualityScore >= 150) {
+                const isSameAsCache = this.languageCache.lastLanguage === bestResult.language;
+                
+                if (isSameAsCache) {
+                  this.languageCache.cacheHits++;
+                  this.languageCache.successCount++;
+                } else {
+                  this.languageCache.lastLanguage = bestResult.language;
+                  this.languageCache.lastQuality = bestResult.qualityScore;
+                  this.languageCache.successCount = 1;
+                }
+                
+                // Log cache efficiency periodically
+                if (this.languageCache.totalDetections % 10 === 0) {
+                  const hitRate = (this.languageCache.cacheHits / this.languageCache.totalDetections * 100).toFixed(1);
+                  logger.info(`[Cache Stats] Language: ${this.languageCache.lastLanguage}, Hit rate: ${hitRate}%, Hits: ${this.languageCache.cacheHits}/${this.languageCache.totalDetections}`);
+                }
+              }
+            }
             
             if (validResults.length === 0) {
               // Try auto transcribe+translate as an additional fallback when all are empty

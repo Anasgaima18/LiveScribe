@@ -44,29 +44,33 @@ export const LANGUAGE_DETECTION = {
   PREFLIGHT_DURATION: 1.6,      // Seconds for initial detection
   PREFLIGHT_MODEL: 'saaras:v2.5', // Auto-detect model
   
-  // Multi-language testing
+  // Multi-language testing (OPTIMIZED for speed)
   MAX_LANGUAGES_ACCURACY: 11,   // Test all for maximum accuracy
-  MAX_LANGUAGES_SPEED: 6,       // Speed mode cap
-  MAX_LANGUAGES_BALANCED: 8,    // Balanced mode
+  MAX_LANGUAGES_SPEED: 2,       // REDUCED: Only test top 2 for speed (en-IN + last detected)
+  MAX_LANGUAGES_BALANCED: 4,    // REDUCED: Test 4 for balanced mode
   
-  // Early exit thresholds
-  EXCEPTIONAL_SCORE: 200,       // Ultra-high confidence
-  SHORT_UTTERANCE_SCORE: 170,   // Short phrase confidence
-  ENGLISH_FAST_PATH_SCORE: 160, // English-specific threshold
-  MIN_WORDS_SHORT: 2,           // Minimum words for short exit
-  MIN_WORDS_EXCEPTIONAL: 6,     // Minimum words for exceptional
+  // Early exit thresholds (MORE AGGRESSIVE)
+  EXCEPTIONAL_SCORE: 180,       // LOWERED: Exit early if confidence is good
+  SHORT_UTTERANCE_SCORE: 150,   // LOWERED: Accept shorter phrases faster
+  ENGLISH_FAST_PATH_SCORE: 140, // LOWERED: English-specific threshold
+  MIN_WORDS_SHORT: 1,           // REDUCED: Allow single-word early exit
+  MIN_WORDS_EXCEPTIONAL: 4,     // REDUCED: Minimum words for exceptional
   
   // Script validation bonuses
   SCRIPT_MATCH_BONUS: 35,       // Bonus for script alignment
   ASCII_RATIO_THRESHOLD: 0.9,   // English ASCII ratio
   
-  // Retry configuration
-  RETRY_ON_EMPTY: true,
-  RETRY_DELAY_MS: 500,
-  EMPTY_BREAK_THRESHOLD: 4,     // Stop after N consecutive empties
+  // Retry configuration (MORE AGGRESSIVE - LESS WAITING)
+  RETRY_ON_EMPTY: false,        // DISABLED: Don't retry empty results (wastes time)
+  RETRY_DELAY_MS: 300,          // REDUCED: Faster retry if enabled
+  EMPTY_BREAK_THRESHOLD: 2,     // REDUCED: Stop after 2 empties instead of 4
   
   // Priority languages (tested first)
   PRIORITY_ORDER: ['en-IN', 'hi-IN', 'te-IN', 'ta-IN'],
+  
+  // SMART CACHING: Remember last successful language per session
+  USE_LAST_LANGUAGE_CACHE: true,
+  CACHE_CONFIDENCE_THRESHOLD: 150, // Only cache if quality score > 150
 };
 
 // Quality Scoring Weights
@@ -176,10 +180,11 @@ export const MODES = {
   SPEED: {
     name: 'speed',
     maxLanguages: LANGUAGE_DETECTION.MAX_LANGUAGES_SPEED,
-    minBatchDuration: 1200, // Realtime optimized
+    minBatchDuration: 1000, // Ultra-fast 1s batches
     earlyExitScore: LANGUAGE_DETECTION.ENGLISH_FAST_PATH_SCORE,
-    enablePreflight: true,
+    enablePreflight: false, // DISABLED: Skip preflight for maximum speed
     enableTTGuard: false,
+    retryOnEmpty: false, // DISABLED: No retries in speed mode
   },
 };
 
