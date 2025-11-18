@@ -197,98 +197,73 @@ export const initSocket = (server) => {
       });
     });
 
-    // OPTIONAL: Realtime transcription passthrough (Sarvam AI skeleton)
-    // Client can send raw PCM chunks; backend forwards to Sarvam and emits
-    // 'transcript:new' events to the room. This is a skeleton; fill Sarvam client.
+    // WebSocket-only Realtime Transcription (Sarvam AI)
     let sarvamSession = null;
-    let sarvamReady = false;
-    let audioQueue = [];
-  socket.on('transcription:start', async ({ roomId, language = 'en' }) => {
-      // Wrap EVERYTHING in try-catch to prevent socket disconnection
+    
+  socket.on('transcription:start', async ({ roomId, language = 'en', mode = 'transcribe' }) => {
       try {
-        logger.info(`=== TRANSCRIPTION START ===`);
-        logger.info(`Room: ${roomId}, Language: ${language}, User: ${socket.user.name}`);
+        logger.info(`Starting WebSocket transcription for room ${roomId}, language: ${language}, user: ${socket.user.name}`);
         
         const provider = process.env.TRANSCRIPTION_PROVIDER;
         const apiKey = process.env.SARVAM_API_KEY;
         
-        logger.info(`Provider: "${provider}"`);
-        logger.info(`API Key present: ${!!apiKey} ${apiKey ? `(length: ${apiKey.length})` : ''}`);
-        
         if (provider !== 'sarvam') {
-          logger.warn(`Transcription provider not sarvam: "${provider}"`);
-          try {
-            socket.emit('transcript:status', { status: 'disabled', reason: 'provider_not_configured' });
-          } catch (emitErr) {
-            logger.error('Failed to emit disabled status:', emitErr);
-          }
+          logger.warn(`Transcription provider not configured: "${provider}"`);
+          socket.emit('transcript:status', { status: 'disabled', reason: 'provider_not_configured' });
           return;
         }
         
         if (!apiKey) {
-          logger.error('SARVAM_API_KEY not configured!');
-          try {
-            socket.emit('transcript:status', { status: 'error', reason: 'api_key_missing' });
-          } catch (emitErr) {
-            logger.error('Failed to emit error status:', emitErr);
-          }
+          logger.error('SARVAM_API_KEY not configured');
+          socket.emit('transcript:status', { status: 'error', reason: 'api_key_missing' });
           return;
         }
         
+        // Import WebSocket client
+        const { createSarvamWebSocketClient } = await import('../utils/transcription/sarvamWebSocketClient.js');
         
-  const { createSarvamClient } = await import('../utils/transcription/sarvamClient.js');
-  // Map language codes: 'en' -> 'en-IN', 'hi' -> 'hi-IN', etc. Support 'auto' for detection+translate
-  const languageCode = language === 'auto' ? 'auto' : (language === 'en' ? 'en-IN' : language === 'hi' ? 'hi-IN' : `${language}-IN`);
+        // Map language codes: 'en' -> 'en-IN', etc.
+        const languageCode = language === 'auto' || language === 'unknown' 
+          ? (process.env.SARVAM_DEFAULT_LANGUAGE || 'en-IN')
+          : (language.includes('-') ? language : `${language}-IN`);
         
-        logger.info(`Creating Sarvam client with language: ${languageCode}`);
-  sarvamSession = createSarvamClient({ language: languageCode });
-        logger.info(`Sarvam client created successfully`);
+        logger.info(`Creating Sarvam WebSocket client (mode: ${mode}, language: ${languageCode})`);
         
-        sarvamSession.on('partial', (data) => {
+        // Create WebSocket client
+        sarvamSession = createSarvamWebSocketClient(apiKey, {
+          mode: mode,
+          language: languageCode,
+          model: mode === 'translate' ? 'saaras:v2.5' : (process.env.SARVAM_STT_MODEL || 'saarika:v2.5'),
+          sampleRate: '16000',
+          inputAudioCodec: 'pcm_s16le',
+          highVadSensitivity: 'true',
+          vadSignals: 'true',
+          flushSignal: 'true'
+        });
+        
+        logger.info('WebSocket client created successfully');
+        
+        // Handle transcript events
+        sarvamSession.on('transcript', async (data) => {
           try {
-            if (!data || typeof data.text !== 'string') {
-              logger.warn('Invalid partial transcript data received');
-              return;
-            }
-            io.to(`call:${roomId}`).emit('transcript:new', {
-              userId,
-              userName: socket.user.name,
-              segment: { text: data.text, timestamp: data.timestamp, isPartial: true },
-            });
-          } catch (err) {
-            logger.error('Error emitting partial transcript:', err);
-          }
-        });        
-        sarvamSession.on('final', async (data) => {
-          try {
-            if (!data || typeof data.text !== 'string') {
-              logger.warn('Invalid final transcript data received');
-              return;
-            }
             const segment = { 
               text: data.text, 
-              timestamp: data.timestamp, 
+              timestamp: Date.now(), 
               isPartial: false,
+              isFinal: data.isFinal,
               language: data.language,
-              autoDetected: !!data.autoDetected
+              latency: data.metrics?.processing_latency
             };
             
-            // Add dual-mode transcript fields if available
-            if (data.dualMode && data.originalText && data.translatedText) {
-              segment.originalText = data.originalText;
-              segment.translatedText = data.translatedText;
-              segment.dualMode = true;
-              logger.info(`Dual-mode transcript: original="${data.originalText}", translated="${data.translatedText}"`);
-            }
-            
-            // Broadcast to room participants
+            // Broadcast to room
             io.to(`call:${roomId}`).emit('transcript:new', {
               userId,
               userName: socket.user.name,
-              segment,
-            });            // Persist final transcript to database
+              segment
+            });
+            
+            // Save to database
             try {
-              // Find the call to get callId
               const Call = (await import('../models/Call.js')).default;
               const call = await Call.findOne({ roomId });
               
@@ -299,116 +274,107 @@ export const initSocket = (server) => {
                   doc = await Transcript.create({ 
                     callId: call._id, 
                     userId, 
-                    segments: [{ text: data.text, timestamp: new Date(data.timestamp) }] 
+                    segments: [{ text: data.text, timestamp: new Date() }] 
                   });
                 } else {
-                  doc.segments.push({ text: data.text, timestamp: new Date(data.timestamp) });
+                  doc.segments.push({ text: data.text, timestamp: new Date() });
                   await doc.save();
                 }
-                logger.info(`Saved transcript for user ${socket.user.name} in call ${call._id}`);
+                logger.debug(`Saved transcript for user ${socket.user.name} in call ${call._id}`);
               }
             } catch (err) {
-              logger.error('Failed to save Sarvam transcript:', err);
+              logger.error('Failed to save transcript:', err);
             }
           } catch (err) {
-            logger.error('Error in final transcript handler:', err);
+            logger.error('Error handling transcript:', err);
           }
         });
         
-        sarvamSession.on('error', (err) => {
+        // Handle speech events
+        sarvamSession.on('speech_start', () => {
           try {
-            logger.error('Sarvam session error:', err);
-            // Ensure error message is a string, even if err.message contains objects
-            const errorMessage = typeof err === 'string' ? err : 
-                                err.message || 
-                                (err.toString && err.toString() !== '[object Object]' ? err.toString() : JSON.stringify(err));
-            socket.emit('transcript:status', { status: 'error', reason: errorMessage });
-          } catch (emitErr) {
-            logger.error('Error emitting error status:', emitErr);
-          }
-        });
-        
-        sarvamSession.on('open', () => {
-          try {
-            logger.info(`Sarvam transcription started for user ${socket.user.name}`);
-            sarvamReady = true;
-            socket.emit('transcript:status', { status: 'active', provider: 'sarvam' });
-            // Process any queued audio chunks
-            if (audioQueue.length > 0) {
-              logger.info(`Processing ${audioQueue.length} queued audio chunks`);
-              audioQueue.forEach(({ chunk, meta }) => {
-                try {
-                  const buf = Buffer.from(chunk, 'base64');
-                  const maybePromise = sarvamSession.sendAudio(buf, meta);
-                  if (maybePromise && typeof maybePromise.catch === 'function') {
-                    maybePromise.catch((err) => logger.error('Queued audio sendAudio failed:', err));
-                  }
-                } catch (e) {
-                  logger.error('Failed to process queued audio chunk:', e);
-                }
-              });
-              audioQueue = [];
-            }
+            io.to(`call:${roomId}`).emit('speech:event', {
+              userId,
+              userName: socket.user.name,
+              type: 'start'
+            });
           } catch (err) {
-            logger.error('Error in open handler:', err);
+            logger.error('Error emitting speech start:', err);
           }
         });
         
-        // Start the session
-        logger.info(`Calling sarvamSession.connect()...`);
-        sarvamSession.connect();
-        logger.info(`Sarvam session connected, emitting status...`);
+        sarvamSession.on('speech_end', () => {
+          try {
+            io.to(`call:${roomId}`).emit('speech:event', {
+              userId,
+              userName: socket.user.name,
+              type: 'end'
+            });
+          } catch (err) {
+            logger.error('Error emitting speech end:', err);
+          }
+        });
         
-        // Emit success status (don't wait for 'open' event, do it immediately)
-        try {
-          socket.emit('transcript:status', { status: 'active', provider: 'sarvam' });
-          logger.info(`Successfully emitted active status`);
-        } catch (emitErr) {
-          logger.error('Failed to emit active status (immediate):', emitErr);
-        }
+        // Handle errors
+        sarvamSession.on('error', (error) => {
+          logger.error('WebSocket transcription error:', error);
+          socket.emit('transcript:status', { 
+            status: 'error', 
+            reason: error.message || 'WebSocket error' 
+          });
+        });
         
-        logger.info(`=== TRANSCRIPTION START COMPLETE ===`);
+        sarvamSession.on('api_error', ({ error, code }) => {
+          logger.error(`Sarvam API error (${code}): ${error}`);
+          socket.emit('transcript:status', { 
+            status: 'error', 
+            reason: `API Error: ${error}`,
+            code 
+          });
+        });
+        
+        // Handle connection events
+        sarvamSession.on('connected', () => {
+          logger.info(`WebSocket transcription connected for user ${socket.user.name}`);
+          socket.emit('transcript:status', { 
+            status: 'active', 
+            provider: 'sarvam-websocket',
+            mode: mode,
+            language: languageCode,
+            expectedLatency: '< 100ms'
+          });
+        });
+        
+        sarvamSession.on('disconnected', ({ code, reason }) => {
+          logger.warn(`WebSocket disconnected (code: ${code}, reason: ${reason})`);
+          if (code !== 1000) {
+            socket.emit('transcript:status', { status: 'reconnecting' });
+          }
+        });
+        
+        // Connect to WebSocket
+        await sarvamSession.connect();
+        
+        logger.info('WebSocket transcription started successfully');
+        
       } catch (e) {
-        logger.error('=== TRANSCRIPTION START FAILED ===');
-        logger.error('Error:', e);
-        logger.error('Stack:', e.stack);
-        try {
-          socket.emit('transcript:status', { status: 'error', reason: e.message });
-        } catch (emitErr) {
-          logger.error('Failed to emit error status:', emitErr);
-        }
+        logger.error('Failed to start WebSocket transcription:', e);
+        socket.emit('transcript:status', { status: 'error', reason: e.message });
       }
     });
 
     socket.on('transcription:audio', ({ chunk, meta }) => {
       try {
         if (!sarvamSession) {
-          // Session not created yet - silently drop (user may have stopped before start completed)
-          return;
-        }
-        
-        if (!sarvamReady) {
-          // Queue audio chunks until session is ready
-          if (audioQueue.length < 100) { // cap queue to prevent memory issues
-            audioQueue.push({ chunk, meta });
-          }
           return;
         }
         
         if (chunk) {
-          // Log metadata if present (first 10 chunks for debugging)
-          if (meta && sarvamSession._chunkCount < 10) {
-            logger.info(`Chunk meta: RMS_Int16=${meta.rmsInt16?.toFixed(0)}, Duration=${meta.durationMs?.toFixed(1)}ms, Samples=${meta.samples}`);
-          }
-          
-          // Expect chunk as base64-encoded PCM16 mono 16kHz
+          // Decode base64 audio chunk to Buffer
           const buf = Buffer.from(chunk, 'base64');
-          const maybePromise = sarvamSession.sendAudio(buf, meta);
-          if (maybePromise && typeof maybePromise.catch === 'function') {
-            maybePromise.catch((err) => {
-              logger.error('sarvamSession.sendAudio failed:', err);
-            });
-          }
+          
+          // Send audio to WebSocket client
+          sarvamSession.sendAudio(buf, meta);
         }
       } catch (e) {
         logger.error('transcription:audio error:', e);
@@ -449,11 +415,11 @@ export const initSocket = (server) => {
     socket.on('transcription:stop', async () => {
       try {
         if (sarvamSession) {
+          const metrics = sarvamSession.getMetrics();
+          logger.info(`Stopping WebSocket transcription. Metrics: ${JSON.stringify(metrics)}`);
           await sarvamSession.close();
         }
         sarvamSession = null;
-        sarvamReady = false;
-        audioQueue = [];
       } catch (e) {
         logger.error('Failed to stop transcription:', e);
       }
@@ -481,8 +447,6 @@ export const initSocket = (server) => {
         logger.error('Error while closing Sarvam session on disconnect:', closeErr);
       } finally {
         sarvamSession = null;
-        sarvamReady = false;
-        audioQueue = [];
       }
 
       activeUsers.delete(userId);
