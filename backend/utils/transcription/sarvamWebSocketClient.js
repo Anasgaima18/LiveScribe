@@ -109,8 +109,9 @@ export class SarvamWebSocketClient extends EventEmitter {
         flush_signal: this.options.flushSignal
       });
       
-      // Add language code for both transcription and translation modes
-      // Translation mode uses this as target language
+      // Add language code parameter
+      // For transcribe mode: specifies input language
+      // For translate mode: specifies target language (source auto-detected)
       params.append('language-code', this.options.language);
       
       const wsUrl = `${SARVAM_WS_BASE_URL}${endpoint}?${params.toString()}`;
@@ -226,11 +227,15 @@ export class SarvamWebSocketClient extends EventEmitter {
    * Handle transcription data
    */
   handleTranscriptionData(data) {
-    const { request_id, transcript, language_code, metrics } = data;
+    const { request_id, transcript, language_code, source_language_code, target_language_code, metrics } = data;
     
     if (!transcript || transcript.trim().length === 0) {
       return;
     }
+    
+    // Determine actual language (source for translate mode, language_code for transcribe mode)
+    const detectedLanguage = source_language_code || language_code;
+    const targetLanguage = target_language_code || language_code;
     
     // Update metrics
     if (metrics) {
@@ -245,13 +250,20 @@ export class SarvamWebSocketClient extends EventEmitter {
     this.emit('transcript', {
       requestId: request_id,
       text: transcript,
-      language: language_code,
+      language: targetLanguage, // Language of the text (target in translate mode)
+      sourceLanguage: detectedLanguage, // Detected source language (for translate mode)
+      targetLanguage: targetLanguage, // Target language
       metrics: metrics,
       isFinal: true, // Sarvam WebSocket returns final transcripts
-      sessionId: this.sessionId
+      sessionId: this.sessionId,
+      mode: this.options.mode
     });
     
-    logger.debug(`📝 Transcript (${language_code || 'detected'}): "${transcript.substring(0, 50)}..." [latency: ${metrics?.processing_latency?.toFixed(0)}ms]`);
+    if (this.options.mode === 'translate' && source_language_code) {
+      logger.info(`🌐 Translation: ${source_language_code} → ${target_language_code} | "${transcript.substring(0, 50)}..." [${metrics?.processing_latency?.toFixed(0)}ms]`);
+    } else {
+      logger.debug(`📝 Transcript (${detectedLanguage || 'detected'}): "${transcript.substring(0, 50)}..." [latency: ${metrics?.processing_latency?.toFixed(0)}ms]`);
+    }
   }
 
   /**

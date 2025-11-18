@@ -225,10 +225,14 @@ export const initSocket = (server) => {
         // Map language codes to Sarvam format (e.g., 'en' -> 'en-IN')
         // Supported: en-IN, hi-IN, bn-IN, kn-IN, ml-IN, mr-IN, od-IN, pa-IN, ta-IN, te-IN, gu-IN
         let languageCode;
+        let actualMode = mode;
         
         if (language === 'auto' || language === 'unknown') {
-          // Use default language for auto detection
+          // For auto language detection, use translate mode with built-in LID
+          // Saaras v2.5 has built-in Language Identification
+          actualMode = 'translate';
           languageCode = process.env.SARVAM_DEFAULT_LANGUAGE || 'en-IN';
+          logger.info(`Auto language detection requested - using translate mode with target: ${languageCode}`);
         } else if (language.includes('-')) {
           // Already in correct format (e.g., 'en-IN')
           languageCode = language;
@@ -239,14 +243,14 @@ export const initSocket = (server) => {
           languageCode = supportedLanguages.includes(fullCode) ? fullCode : 'en-IN';
         }
         
-        logger.info(`Creating Sarvam WebSocket client (mode: ${mode}, language: ${languageCode})`);
+        logger.info(`Creating Sarvam WebSocket client (mode: ${actualMode}, language: ${languageCode})`);
 
         
         // Create WebSocket client
         sarvamSession = createSarvamWebSocketClient(apiKey, {
-          mode: mode,
+          mode: actualMode,
           language: languageCode,
-          model: mode === 'translate' ? 'saaras:v2.5' : (process.env.SARVAM_STT_MODEL || 'saarika:v2.5'),
+          model: actualMode === 'translate' ? 'saaras:v2.5' : (process.env.SARVAM_STT_MODEL || 'saarika:v2.5'),
           sampleRate: '16000',
           inputAudioCodec: 'pcm_s16le',
           highVadSensitivity: 'true',
@@ -265,8 +269,16 @@ export const initSocket = (server) => {
               isPartial: false,
               isFinal: data.isFinal,
               language: data.language,
+              sourceLanguage: data.sourceLanguage, // Detected source language
+              targetLanguage: data.targetLanguage, // Target language
+              mode: data.mode, // 'transcribe' or 'translate'
               latency: data.metrics?.processing_latency
             };
+            
+            // Log language detection in translate mode
+            if (data.mode === 'translate' && data.sourceLanguage) {
+              logger.info(`Detected language: ${data.sourceLanguage} → translating to ${data.targetLanguage}`);
+            }
             
             // Broadcast to room
             io.to(`call:${roomId}`).emit('transcript:new', {
