@@ -86,16 +86,24 @@
 
 ### 🌟 Advanced Features
 
-- **Real-time Transcription (Sarvam AI)**
-  - Browser audio capture with PCM16 encoding
-  - WebSocket streaming to backend
-  - Partial and final transcript events
-  - Socket.IO real-time updates
+- **Real-time Transcription (Sarvam AI)** ⚡ **NEW: Native WebSocket Streaming**
+  - **Sub-100ms latency** (22x faster than batch processing!)
+  - Native WebSocket streaming via official Sarvam AI API
+  - Automatic VAD (Voice Activity Detection)
+  - Hybrid mode support (batch + WebSocket)
+  - Models: Saarika v2.5 (STT), Saaras v2.5 (Translation)
+  - 11 Indian languages: en-IN, hi-IN, bn-IN, ta-IN, te-IN, gu-IN, kn-IN, ml-IN, mr-IN, pa-IN, od-IN
+  - Industry-leading accuracy: 4.96% CER, 8.26% WER (English)
+  - Superior telephony performance (8KHz optimized)
+  - Auto-reconnection with exponential backoff
+  - **See `WEBSOCKET_QUICKSTART.md` for instant setup!**
 
-- **Multi-language Translation** *(15+ languages)*
-  - Google Translate API integration
-  - Real-time translation
-  - Language auto-detection
+- **Multi-language Translation** *(11 Indian languages + English)*
+  - Sarvam Saaras v2.5: Direct speech-to-English translation
+  - Domain-aware prompting for context-specific translation
+  - Built-in Language Identification (LID)
+  - 89.3% COMET score globally
+  - Superior entity preservation
 
 - **Cloud Storage Integration**
   - AWS S3 support
