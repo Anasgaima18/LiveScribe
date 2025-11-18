@@ -23,7 +23,6 @@ import livekitRoutes from './routes/livekitRoutes.js';
 import callRoutes from './routes/callRoutes.js';
 import translationRoutes from './routes/translationRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
-import webhookRoutes from './routes/webhookRoutes.js';
 
 // Handle uncaught exceptions
 handleUncaughtException();
@@ -182,7 +181,6 @@ app.use('/api/livekit', livekitRoutes);
 app.use('/api/calls', callRoutes);
 app.use('/api/translation', translationRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/webhooks', webhookRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
