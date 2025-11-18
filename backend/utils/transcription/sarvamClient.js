@@ -54,8 +54,8 @@ export class SarvamSTTClient {
     this.apiKey = apiKey;
     this.baseURL = options.baseURL || SARVAM_BASE_URL;
     this.language = options.language || 'en-IN'; // Default to English
-    // Use latest stable model version - saarika:v2 is most accurate per Sarvam docs
-    this.model = options.model || process.env.SARVAM_STT_MODEL || 'saarika:v2';
+    // Use latest stable model version - saarika:v2.5 flagship model with superior accuracy
+    this.model = options.model || process.env.SARVAM_STT_MODEL || 'saarika:v2.5';
     this.withTimestamps = options.withTimestamps !== false;
     this.enablePreprocessing = options.enablePreprocessing !== false; // Enable by default for accuracy
     

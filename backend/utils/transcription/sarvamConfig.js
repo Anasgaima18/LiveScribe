@@ -42,11 +42,13 @@ export const LANGUAGE_DETECTION = {
   // Primary detection method
   PREFLIGHT_ENABLED: true,
   PREFLIGHT_DURATION: 1.6,      // Seconds for initial detection
-  PREFLIGHT_MODEL: 'saaras:v2.5', // Auto-detect model
+  PREFLIGHT_MODEL: 'saaras:v2.5', // Domain-aware speech translation with auto LIDch translation with built-in LID
   
   // Multi-language testing (OPTIMIZED for speed)
-  MAX_LANGUAGES_ACCURACY: 11,   // Test all for maximum accuracy
-  MAX_LANGUAGES_SPEED: 2,       // REDUCED: Only test top 2 for speed (en-IN + last detected)
+  // Saarika v2.5 supports: en-IN, hi-IN, bn-IN, ta-IN, te-IN, gu-IN, kn-IN, ml-IN, mr-IN, pa-IN, od-IN
+  // Use 'unknown' for automatic language detection
+  MAX_LANGUAGES_ACCURACY: 11,   // Test all 11 supported languages for maximum accuracy
+  MAX_LANGUAGES_SPEED: 2,       // REDUCED: Only test top 2 for speed (en-IN + cached)
   MAX_LANGUAGES_BALANCED: 4,    // REDUCED: Test 4 for balanced mode
   
   // Early exit thresholds (MORE AGGRESSIVE)
@@ -117,9 +119,9 @@ export const BATCHING_CONFIG = {
 
 // API Request Configuration
 export const API_CONFIG = {
-  // Models (per Sarvam docs)
-  STT_MODEL: 'saarika:v2',      // Most accurate STT
-  STT_TRANSLATE_MODEL: 'saaras:v2.5', // Auto-detect + translate
+  // Models (per Sarvam docs - Latest versions)
+  STT_MODEL: 'saarika:v2.5',    // Flagship STT model with superior accuracy
+  STT_TRANSLATE_MODEL: 'saaras:v2.5', // Domain-aware speech translation
   TRANSLATE_MODEL: 'mayura:v1', // Text translation
   TTS_MODEL: 'bulbul:v2',       // Text-to-speech
   
