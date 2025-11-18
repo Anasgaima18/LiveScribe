@@ -864,10 +864,23 @@ export class SarvamRealtimeClient extends EventEmitter {
             // Always include English early for short utterances
             prioritized.push('en-IN');
             const fullList = [...new Set([...prioritized, ...baseList])];
-            const speedCap = parseInt(process.env.SPEED_MAX_LANGUAGES || '2'); // Reduced default from 6 to 2
-            const cap = this.latencyMode === 'speed' ? Math.min(fullList.length, speedCap) : fullList.length;
+            
+            // Apply appropriate cap based on mode - use config values
+            const speedCap = this.config.languageDetection.MAX_LANGUAGES_SPEED || 2;
+            const balancedCap = this.config.languageDetection.MAX_LANGUAGES_BALANCED || 4;
+            const accuracyCap = this.config.languageDetection.MAX_LANGUAGES_ACCURACY || 11;
+            
+            let cap;
+            if (this.latencyMode === 'speed') {
+              cap = Math.min(fullList.length, speedCap);
+            } else if (this.latencyMode === 'balanced') {
+              cap = Math.min(fullList.length, balancedCap);
+            } else {
+              cap = Math.min(fullList.length, accuracyCap);
+            }
+            
             const languagesToTry = fullList.slice(0, cap);
-            logger.info(`[Batch ${batchId}] Testing ${languagesToTry.length} languages: ${languagesToTry.join(', ')}`);
+            logger.info(`[Batch ${batchId}] Testing ${languagesToTry.length} languages (${this.latencyMode} mode, cap=${cap}): ${languagesToTry.join(', ')}`);
             
             // SEQUENTIAL language testing with rate limit handling (prevents 429 errors)
             // Test languages one-by-one with minimal delays to respect API rate limits
@@ -888,11 +901,12 @@ export class SarvamRealtimeClient extends EventEmitter {
                 const langResult = await this.sttClient.transcribe(wavBuffer, { language: lang, withTimestamps: false });
                 let transcript = (langResult.transcript || '').trim();
                 
-                // SPEED OPTIMIZATION: Only retry if explicitly enabled and empty count is low
-                const shouldRetryEmpty = this.config.preflight.enabled && consecutiveEmpties < 1;
-                if ((!transcript || transcript.length === 0) && shouldRetryEmpty) {
-                  logger.warn(`[Batch ${batchId}] ${lang} returned empty, retrying once after 300ms...`);
-                  await new Promise(resolve => setTimeout(resolve, 300)); // Reduced from 500ms
+                // SPEED OPTIMIZATION: Skip empty results entirely (no retry unless explicitly enabled in config)
+                const retryOnEmpty = this.config.languageDetection.RETRY_ON_EMPTY || false;
+                if ((!transcript || transcript.length === 0) && retryOnEmpty && consecutiveEmpties < 1) {
+                  const retryDelay = this.config.languageDetection.RETRY_DELAY_MS || 300;
+                  logger.warn(`[Batch ${batchId}] ${lang} returned empty, retrying once after ${retryDelay}ms...`);
+                  await new Promise(resolve => setTimeout(resolve, retryDelay));
                   const retryResult = await this.sttClient.transcribe(wavBuffer, { language: lang, withTimestamps: false });
                   transcript = (retryResult.transcript || '').trim();
                   if (transcript.length > 0) {
@@ -903,6 +917,7 @@ export class SarvamRealtimeClient extends EventEmitter {
                   }
                 } else if (!transcript || transcript.length === 0) {
                   consecutiveEmpties++;
+                  logger.debug(`[Batch ${batchId}] ${lang} returned empty, skipping (no retry)`);
                   // Skip this result entirely - don't add to allResults
                   continue;
                 }
@@ -962,6 +977,7 @@ export class SarvamRealtimeClient extends EventEmitter {
                 }
 
                 // Early break if too many empties in a row (likely silence/too quiet or wrong batch)
+                const emptyBreakThreshold = this.config.languageDetection.EMPTY_BREAK_THRESHOLD || 2;
                 if (consecutiveEmpties >= emptyBreakThreshold) {
                   logger.warn(`[Batch ${batchId}] ${consecutiveEmpties} consecutive empty transcripts — stopping language loop early`);
                   break;
