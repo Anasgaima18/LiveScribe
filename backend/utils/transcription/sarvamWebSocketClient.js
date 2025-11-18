@@ -21,6 +21,12 @@ import logger from '../../config/logger.js';
 
 const SARVAM_WS_BASE_URL = 'wss://api.sarvam.ai';
 
+// Sarvam AI supported languages (11 Indian languages)
+const SUPPORTED_LANGUAGES = [
+  'en-IN', 'hi-IN', 'bn-IN', 'kn-IN', 'ml-IN', 'mr-IN',
+  'od-IN', 'pa-IN', 'ta-IN', 'te-IN', 'gu-IN'
+];
+
 /**
  * Sarvam WebSocket Streaming Client
  * Provides real-time speech-to-text with sub-second latency
@@ -34,8 +40,16 @@ export class SarvamWebSocketClient extends EventEmitter {
     }
     
     this.apiKey = apiKey;
+    
+    // Validate and normalize language code
+    let languageCode = options.language || 'en-IN';
+    if (!SUPPORTED_LANGUAGES.includes(languageCode)) {
+      logger.warn(`Unsupported language: ${languageCode}. Falling back to en-IN`);
+      languageCode = 'en-IN';
+    }
+    
     this.options = {
-      language: options.language || 'en-IN',
+      language: languageCode,
       model: options.model || 'saarika:v2.5',
       mode: options.mode || 'transcribe', // 'transcribe' or 'translate'
       sampleRate: options.sampleRate || '16000',
@@ -95,10 +109,9 @@ export class SarvamWebSocketClient extends EventEmitter {
         flush_signal: this.options.flushSignal
       });
       
-      // Add language code only for transcription mode
-      if (this.options.mode === 'transcribe') {
-        params.append('language-code', this.options.language);
-      }
+      // Add language code for both transcription and translation modes
+      // Translation mode uses this as target language
+      params.append('language-code', this.options.language);
       
       const wsUrl = `${SARVAM_WS_BASE_URL}${endpoint}?${params.toString()}`;
       
@@ -413,6 +426,13 @@ export class SarvamWebSocketClient extends EventEmitter {
  */
 export function createSarvamWebSocketClient(apiKey, options = {}) {
   return new SarvamWebSocketClient(apiKey, options);
+}
+
+/**
+ * Get list of supported languages
+ */
+export function getSupportedLanguages() {
+  return [...SUPPORTED_LANGUAGES];
 }
 
 export default SarvamWebSocketClient;

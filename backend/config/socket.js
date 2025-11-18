@@ -220,14 +220,27 @@ export const initSocket = (server) => {
         }
         
         // Import WebSocket client
-        const { createSarvamWebSocketClient } = await import('../utils/transcription/sarvamWebSocketClient.js');
+        const { createSarvamWebSocketClient, getSupportedLanguages } = await import('../utils/transcription/sarvamWebSocketClient.js');
         
-        // Map language codes: 'en' -> 'en-IN', etc.
-        const languageCode = language === 'auto' || language === 'unknown' 
-          ? (process.env.SARVAM_DEFAULT_LANGUAGE || 'en-IN')
-          : (language.includes('-') ? language : `${language}-IN`);
+        // Map language codes to Sarvam format (e.g., 'en' -> 'en-IN')
+        // Supported: en-IN, hi-IN, bn-IN, kn-IN, ml-IN, mr-IN, od-IN, pa-IN, ta-IN, te-IN, gu-IN
+        let languageCode;
+        
+        if (language === 'auto' || language === 'unknown') {
+          // Use default language for auto detection
+          languageCode = process.env.SARVAM_DEFAULT_LANGUAGE || 'en-IN';
+        } else if (language.includes('-')) {
+          // Already in correct format (e.g., 'en-IN')
+          languageCode = language;
+        } else {
+          // Map short code to full code (e.g., 'en' -> 'en-IN', 'hi' -> 'hi-IN')
+          const supportedLanguages = getSupportedLanguages();
+          const fullCode = `${language}-IN`;
+          languageCode = supportedLanguages.includes(fullCode) ? fullCode : 'en-IN';
+        }
         
         logger.info(`Creating Sarvam WebSocket client (mode: ${mode}, language: ${languageCode})`);
+
         
         // Create WebSocket client
         sarvamSession = createSarvamWebSocketClient(apiKey, {
