@@ -161,65 +161,57 @@
 
 .lk-control-bar {
   position: fixed !important;
-  background: rgba(30, 30, 35, 0.85) !important;
+  background: rgba(20, 20, 25, 0.9) !important;
   backdrop-filter: saturate(180%) blur(20px) !important;
   -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
   border: 0.5px solid rgba(255, 255, 255, 0.18) !important;
-  border-radius: 20px !important;
-  padding: 12px 20px !important;
-  bottom: 20px !important;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 255, 255, 0.1) inset !important;
+  border-radius: 24px !important;
+  padding: 10px 16px !important;
+  bottom: 24px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 0 0.5px rgba(255, 255, 255, 0.1) inset !important;
   max-width: fit-content !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
   z-index: 1000 !important;
   display: flex !important;
   align-items: center !important;
-  gap: 8px !important;
+  gap: 6px !important;
+}
+
+/* Hide text labels in buttons */
+.lk-control-bar .lk-button span:not(.lk-button-icon) {
+  display: none !important;
+}
+
+/* Hide dropdown menus text */
+.lk-control-bar .lk-button-group-menu {
+  min-width: auto !important;
 }
 
 .lk-button {
   color: white !important;
-  background: rgba(255, 255, 255, 0.12) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
   border: none !important;
   border-radius: 50% !important;
-  width: 52px !important;
-  height: 52px !important;
-  min-width: 52px !important;
-  min-height: 52px !important;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  width: 48px !important;
+  height: 48px !important;
+  min-width: 48px !important;
+  min-height: 48px !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
   margin: 0 !important;
   padding: 0 !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+  box-shadow: none !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   position: relative !important;
-  overflow: hidden !important;
-}
-
-.lk-button::before {
-  content: '' !important;
-  position: absolute !important;
-  top: 50% !important;
-  left: 50% !important;
-  width: 0 !important;
-  height: 0 !important;
-  border-radius: 50% !important;
-  background: rgba(255, 255, 255, 0.2) !important;
-  transform: translate(-50%, -50%) !important;
-  transition: width 0.3s, height 0.3s !important;
+  overflow: visible !important;
+  cursor: pointer !important;
 }
 
 .lk-button:hover {
-  background: rgba(255, 255, 255, 0.18) !important;
-  transform: scale(1.08) !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
-}
-
-.lk-button:hover::before {
-  width: 100% !important;
-  height: 100% !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  transform: scale(1.1) !important;
 }
 
 .lk-button:active {
@@ -228,30 +220,73 @@
 }
 
 .lk-button svg {
-  width: 24px !important;
-  height: 24px !important;
+  width: 22px !important;
+  height: 22px !important;
   position: relative !important;
   z-index: 1 !important;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3)) !important;
 }
 
-/* Active/pressed state for microphone and camera */
-.lk-button[aria-pressed="true"],
-.lk-button.lk-button-active {
-  background: rgba(255, 69, 58, 0.9) !important;
-  box-shadow: 0 4px 16px rgba(255, 69, 58, 0.4) !important;
+/* Muted/Off state (red) */
+.lk-button[data-lk-source="microphone"][aria-pressed="true"],
+.lk-button[data-lk-source="camera"][aria-pressed="true"] {
+  background: rgba(255, 59, 48, 1) !important;
 }
 
-.lk-button[aria-pressed="true"]:hover,
-.lk-button.lk-button-active:hover {
+.lk-button[data-lk-source="microphone"][aria-pressed="true"]:hover,
+.lk-button[data-lk-source="camera"][aria-pressed="true"]:hover {
   background: rgba(255, 69, 58, 1) !important;
-  transform: scale(1.08) !important;
+  transform: scale(1.1) !important;
 }
 
 .lk-button-group {
-  gap: 8px !important;
+  gap: 6px !important;
   display: flex !important;
   align-items: center !important;
+}
+
+/* Custom Leave button styling if using custom button */
+.lk-disconnect-button,
+.lk-button.lk-disconnect-button,
+button[data-lk-disconnect] {
+  background: transparent !important;
+  border: 1.5px solid rgba(255, 59, 48, 0.8) !important;
+  color: rgba(255, 59, 48, 1) !important;
+  width: auto !important;
+  min-width: 90px !important;
+  height: 48px !important;
+  border-radius: 24px !important;
+  padding: 0 20px !important;
+  font-weight: 600 !important;
+  font-size: 0.9rem !important;
+  margin-left: 8px !important;
+}
+
+.lk-disconnect-button:hover,
+.lk-button.lk-disconnect-button:hover,
+button[data-lk-disconnect]:hover {
+  background: rgba(255, 59, 48, 1) !important;
+  color: white !important;
+  border-color: rgba(255, 59, 48, 1) !important;
+  transform: scale(1.05) !important;
+}
+
+/* Separator before leave button */
+.lk-disconnect-button::before,
+button[data-lk-disconnect]::before {
+  content: '' !important;
+  position: absolute !important;
+  left: -12px !important;
+  width: 1px !important;
+  height: 24px !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+}
+
+.lk-button-group + .lk-button-group::before {
+  content: '' !important;
+  width: 1px !important;
+  height: 24px !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+  margin: 0 4px !important;
 }
 
 .transcript-overlay {
