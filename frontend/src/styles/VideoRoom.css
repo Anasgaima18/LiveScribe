@@ -1,3 +1,4 @@
+/* LiveScribe Video Room - iOS 26 / macOS 26 Design v2.0 */
 :root{
   /* iOS 26 / macOS 26 Colors */
   --bg: #000;
@@ -197,7 +198,7 @@
 }
 
 /* --------------------------
-   Control bar (bottom, centered)
+   Control bar (bottom, centered) - iOS 26 Control Center
    -------------------------- */
 .lk-control-bar{
   position: fixed !important;
