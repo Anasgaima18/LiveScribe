@@ -225,12 +225,34 @@
   transition: all 0.1s !important;
 }
 
+/* Active/enabled state for devices (mic, camera on) */
+.lk-button[data-lk-source="microphone"]:not([aria-pressed="true"]),
+.lk-button[data-lk-source="camera"]:not([aria-pressed="true"]) {
+  background: rgba(52, 199, 89, 0.15) !important;
+  border-color: rgba(52, 199, 89, 0.3) !important;
+}
+
+.lk-button[data-lk-source="microphone"]:not([aria-pressed="true"]):hover,
+.lk-button[data-lk-source="camera"]:not([aria-pressed="true"]):hover {
+  background: rgba(52, 199, 89, 0.25) !important;
+  border-color: rgba(52, 199, 89, 0.4) !important;
+}
+
 .lk-button svg {
   width: 24px !important;
   height: 24px !important;
   position: relative !important;
   z-index: 1 !important;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3)) !important;
+}
+
+/* Ensure dropdown toggle icons are visible */
+.lk-button .lk-button-icon svg,
+.lk-button svg[data-icon],
+.lk-button-group .lk-button svg {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
 /* Muted/Off state (red) */

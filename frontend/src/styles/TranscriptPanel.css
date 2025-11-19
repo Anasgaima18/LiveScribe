@@ -143,8 +143,9 @@
 .empty-message {
   text-align: center;
   padding: 48px 24px;
-  color: var(--text-muted);
+  color: rgba(255, 255, 255, 0.6);
   font-size: 0.95rem;
+  line-height: 1.6;
 }
 
 .transcript-content {
@@ -509,22 +510,28 @@
 }
 
 .summary-content {
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.03);
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.05);
   border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
 }
 
 .summary-text h3 {
   color: var(--accent-primary);
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0 0 12px 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 0 16px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .summary-text p {
-  color: var(--text-secondary);
-  line-height: 1.6;
+  color: white;
+  line-height: 1.8;
   margin: 0;
+  font-size: 0.95rem;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 .transcript-item {
