@@ -150,31 +150,35 @@
 }
 
 .lk-control-bar {
-  background: rgba(21, 21, 32, 0.85) !important;
+  background: rgba(21, 21, 32, 0.9) !important;
   backdrop-filter: blur(20px) !important;
   border: 1px solid var(--glass-border) !important;
   border-radius: var(--radius-full) !important;
-  padding: 12px 24px !important;
+  padding: 12px 32px !important;
   bottom: 32px !important;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+  max-width: 90% !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
 }
 
 .lk-button {
   color: var(--text-primary) !important;
   background: rgba(255, 255, 255, 0.1) !important;
   border-radius: 50% !important;
-  width: 48px !important;
-  height: 48px !important;
+  width: 52px !important;
+  height: 52px !important;
   transition: all var(--transition-fast) !important;
+  margin: 0 4px !important;
 }
 
 .lk-button:hover {
   background: rgba(255, 255, 255, 0.2) !important;
-  transform: scale(1.1);
+  transform: scale(1.05);
 }
 
 .lk-button-group {
-  gap: 16px !important;
+  gap: 12px !important;
 }
 
 .transcript-overlay {
