@@ -166,7 +166,7 @@
   -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
   border: 0.5px solid rgba(255, 255, 255, 0.18) !important;
   border-radius: 24px !important;
-  padding: 10px 16px !important;
+  padding: 8px 14px !important;
   bottom: 24px !important;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 0 0.5px rgba(255, 255, 255, 0.1) inset !important;
   max-width: fit-content !important;
@@ -175,10 +175,14 @@
   z-index: 1000 !important;
   display: flex !important;
   align-items: center !important;
-  gap: 6px !important;
+  gap: 4px !important;
 }
 
-/* Hide text labels in buttons */
+/* Force icon-only controls: hide any textual labels inside buttons */
+.lk-control-bar .lk-button {
+  font-size: 0 !important;
+}
+
 .lk-control-bar .lk-button span:not(.lk-button-icon) {
   display: none !important;
 }
