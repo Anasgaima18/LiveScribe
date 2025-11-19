@@ -80,74 +80,75 @@ const AdminDashboard = () => {
         </button>
       </header>
 
-      {/* Overview Cards */}
-      {stats && (
-        <div className="stats-grid">
-          <div className="stat-card">
-            <h3>Total Users</h3>
-            <p className="stat-number">{stats.overview.totalUsers}</p>
-            <small>+{stats.growth.newUsers} this week</small>
+      <div className="admin-content">
+        {/* Overview Cards */}
+        {stats && (
+          <div className="stats-grid">
+            <div className="stat-card">
+              <h3>Total Users</h3>
+              <p className="stat-number">{stats.overview.totalUsers}</p>
+              <small>+{stats.growth.newUsers} this week</small>
+            </div>
+            <div className="stat-card">
+              <h3>Total Calls</h3>
+              <p className="stat-number">{stats.overview.totalCalls}</p>
+              <small>+{stats.growth.newCalls} this week</small>
+            </div>
+            <div className="stat-card active">
+              <h3>Active Calls</h3>
+              <p className="stat-number">{stats.overview.activeCalls}</p>
+              <small>Right now</small>
+            </div>
+            <div className="stat-card warning">
+              <h3>Total Alerts</h3>
+              <p className="stat-number">{stats.overview.totalAlerts}</p>
+              <small>{stats.overview.criticalAlerts} critical</small>
+            </div>
           </div>
-          <div className="stat-card">
-            <h3>Total Calls</h3>
-            <p className="stat-number">{stats.overview.totalCalls}</p>
-            <small>+{stats.growth.newCalls} this week</small>
-          </div>
-          <div className="stat-card active">
-            <h3>Active Calls</h3>
-            <p className="stat-number">{stats.overview.activeCalls}</p>
-            <small>Right now</small>
-          </div>
-          <div className="stat-card warning">
-            <h3>Total Alerts</h3>
-            <p className="stat-number">{stats.overview.totalAlerts}</p>
-            <small>{stats.overview.criticalAlerts} critical</small>
-          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="admin-tabs">
+          <button
+            className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
+            onClick={() => setActiveTab('overview')}
+          >
+            Overview
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'sessions' ? 'active' : ''}`}
+            onClick={() => setActiveTab('sessions')}
+          >
+            Active Sessions ({activeSessions.length})
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('users');
+              fetchUsers();
+            }}
+          >
+            Users
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`}
+            onClick={() => setActiveTab('analytics')}
+          >
+            Analytics
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'alerts' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('alerts');
+              fetchAlerts();
+            }}
+          >
+            Alerts
+          </button>
         </div>
-      )}
 
-      {/* Tabs */}
-      <div className="tabs">
-        <button
-          className={activeTab === 'overview' ? 'active' : ''}
-          onClick={() => setActiveTab('overview')}
-        >
-          Overview
-        </button>
-        <button
-          className={activeTab === 'sessions' ? 'active' : ''}
-          onClick={() => setActiveTab('sessions')}
-        >
-          Active Sessions ({activeSessions.length})
-        </button>
-        <button
-          className={activeTab === 'users' ? 'active' : ''}
-          onClick={() => {
-            setActiveTab('users');
-            fetchUsers();
-          }}
-        >
-          Users
-        </button>
-        <button
-          className={activeTab === 'analytics' ? 'active' : ''}
-          onClick={() => setActiveTab('analytics')}
-        >
-          Analytics
-        </button>
-        <button
-          className={activeTab === 'alerts' ? 'active' : ''}
-          onClick={() => {
-            setActiveTab('alerts');
-            fetchAlerts();
-          }}
-        >
-          Alerts
-        </button>
-      </div>
-
-      {/* Tab Content */}
-      <div className="tab-content">
+        {/* Tab Content */}
+        <div className="tab-content">
         {activeTab === 'overview' && stats && (
           <div className="overview-section">
             <div className="recent-section">
@@ -357,6 +358,7 @@ const AdminDashboard = () => {
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
