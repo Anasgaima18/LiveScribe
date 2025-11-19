@@ -1,12 +1,12 @@
 .realtime-transcription {
-  background: rgba(21, 21, 32, 0.6);
+  background: rgba(21, 21, 32, 0.8);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-radius: var(--radius-lg);
-  padding: 20px;
-  margin-top: 16px;
+  padding: 16px;
   border: 1px solid var(--glass-border);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid rgba(41, 151, 255, 0.2);
 }
 
 .rt-header {
@@ -32,13 +32,17 @@
 }
 
 .rt-status {
-  color: var(--text-secondary);
+  color: var(--text-primary);
   font-size: 0.75rem;
-  padding: 4px 8px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: var(--radius-sm);
-  font-weight: 500;
-  display: inline-block;
+  padding: 6px 12px;
+  background: rgba(41, 151, 255, 0.15);
+  border: 1px solid rgba(41, 151, 255, 0.3);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .rt-controls {
@@ -51,7 +55,8 @@
 .rt-controls-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
@@ -59,17 +64,22 @@
   font-size: 0.85rem;
   color: var(--text-secondary);
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 
 .rt-select {
-  padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.05);
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   font-size: 0.85rem;
   cursor: pointer;
   transition: all var(--transition-fast);
+  min-width: 200px;
 }
 
 .rt-select:hover {
@@ -92,12 +102,13 @@
 
 .btn-start,
 .btn-stop {
-  padding: 8px 20px;
-  border-radius: var(--radius-full);
+  padding: 10px 24px;
+  border-radius: var(--radius-md);
   border: none;
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
   transition: all var(--transition-fast);
 }
 

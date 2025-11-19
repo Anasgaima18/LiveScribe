@@ -13,13 +13,13 @@
   border-bottom: 1px solid var(--glass-border);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   background: rgba(0, 0, 0, 0.3);
 }
 
 .panel-tabs {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   background: rgba(255, 255, 255, 0.05);
   padding: 4px;
   border-radius: var(--radius-md);
@@ -28,17 +28,20 @@
 
 .panel-tabs button {
   flex: 1;
-  padding: 8px 12px;
+  padding: 10px 16px;
   background: transparent;
   color: var(--text-secondary);
   border: none;
   border-radius: var(--radius-sm);
   font-weight: 600;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   cursor: pointer;
   transition: all var(--transition-fast);
   white-space: nowrap;
   text-align: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .panel-tabs button.active {
