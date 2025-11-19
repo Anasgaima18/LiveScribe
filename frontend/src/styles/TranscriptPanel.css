@@ -47,12 +47,14 @@
 .panel-tabs button.active {
   background: var(--accent-primary);
   color: white;
-  box-shadow: 0 2px 8px rgba(41, 151, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(41, 151, 255, 0.4);
+  font-weight: 700;
+  transform: scale(1.02);
 }
 
 .panel-tabs button:hover:not(.active) {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
 }
 
 .btn-summarize {
