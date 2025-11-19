@@ -176,6 +176,8 @@
   display: flex !important;
   align-items: center !important;
   gap: 6px !important;
+  flex-wrap: nowrap !important;
+  overflow: visible !important;
 }
 
 /* Force icon-only controls: hide any textual labels inside buttons */
@@ -184,6 +186,14 @@
 }
 
 .lk-control-bar .lk-button span:not(.lk-button-icon) {
+  display: none !important;
+}
+
+/* Hide dropdown toggle buttons (the empty circles next to mic/camera) */
+.lk-button-group .lk-button:last-child:not([data-lk-source]),
+.lk-button[aria-haspopup="menu"],
+.lk-button[data-lk-toggle],
+button.lk-button.lk-button-menu {
   display: none !important;
 }
 
@@ -228,14 +238,15 @@
 /* Active/enabled state for devices (mic, camera on) */
 .lk-button[data-lk-source="microphone"]:not([aria-pressed="true"]),
 .lk-button[data-lk-source="camera"]:not([aria-pressed="true"]) {
-  background: rgba(52, 199, 89, 0.15) !important;
-  border-color: rgba(52, 199, 89, 0.3) !important;
+  background: rgba(52, 199, 89, 0.2) !important;
+  border-color: rgba(52, 199, 89, 0.4) !important;
 }
 
 .lk-button[data-lk-source="microphone"]:not([aria-pressed="true"]):hover,
 .lk-button[data-lk-source="camera"]:not([aria-pressed="true"]):hover {
-  background: rgba(52, 199, 89, 0.25) !important;
-  border-color: rgba(52, 199, 89, 0.4) !important;
+  background: rgba(52, 199, 89, 0.3) !important;
+  border-color: rgba(52, 199, 89, 0.5) !important;
+  box-shadow: 0 4px 16px rgba(52, 199, 89, 0.3) !important;
 }
 
 .lk-button svg {
@@ -275,6 +286,13 @@
   gap: 6px !important;
   display: flex !important;
   align-items: center !important;
+}
+
+/* Hide the settings/more options button */
+.lk-button[data-lk-settings],
+.lk-button[aria-label*="Settings"],
+.lk-button[aria-label*="More"] {
+  display: none !important;
 }
 
 /* Custom Leave button styling if using custom button */
