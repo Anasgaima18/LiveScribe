@@ -137,7 +137,7 @@ const TranscriptPanel = ({ callId }) => {
           className="btn-summarize"
           disabled={loading || transcripts.length === 0}
         >
-          {loading ? 'Generating...' : 'Generate Summary'}
+          {loading ? 'Generating...' : '📝 Generate Summary'}
         </button>
       </div>
 

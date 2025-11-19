@@ -11,21 +11,83 @@
 
 .rt-header {
   display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.rt-header-row {
+  display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
 }
 
 .rt-header h4 {
   color: var(--text-primary);
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   margin: 0;
 }
 
+.rt-status {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  display: inline-block;
+}
+
 .rt-controls {
   display: flex;
-  gap: 12px;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rt-controls-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rt-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.rt-select {
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.rt-select:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.rt-select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.rt-warning {
+  color: var(--accent-warning);
+  font-size: 0.85rem;
+  padding: 8px 12px;
+  background: rgba(255, 149, 0, 0.1);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent-warning);
 }
 
 .btn-start,

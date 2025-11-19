@@ -179,18 +179,20 @@
 
 .transcript-overlay {
   position: absolute;
-  top: 80px;
+  top: 90px;
   right: 24px;
-  width: 360px;
-  height: calc(100vh - 180px);
-  background: rgba(21, 21, 32, 0.9);
+  width: 400px;
+  height: calc(100vh - 200px);
+  background: rgba(21, 21, 32, 0.95);
   backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   z-index: 150;
-  overflow-y: auto;
+  overflow: hidden;
   box-shadow: -8px 0 32px rgba(0, 0, 0, 0.5);
-  padding: 16px;
+  display: flex;
+  flex-direction: column;
 }
 
 .video-room-container {

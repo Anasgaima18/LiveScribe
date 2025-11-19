@@ -179,12 +179,22 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
   return (
     <div className="realtime-transcription">
       <div className="rt-header">
-        <h4>Realtime Transcription</h4>
-        <div className="rt-status">{`Mode: ${providerName || mode} | Status: ${providerStatus}${detectedLanguage ? ` | Lang: ${detectedLanguage}` : ''}`}</div>
-        <div className="rt-controls" style={{ gap: '8px', display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
-          <label style={{ fontSize: '13px' }}>
+        <div className="rt-header-row">
+          <h4>Realtime Transcription</h4>
+          <div className="rt-status">
+            Mode: {providerName || mode} | Status: {providerStatus}
+            {detectedLanguage && ` | Lang: ${detectedLanguage}`}
+          </div>
+        </div>
+        
+        <div className="rt-controls-group">
+          <label className="rt-label">
             Language:
-            <select value={language} onChange={(e) => setLanguage(e.target.value)} style={{ marginLeft: '6px' }}>
+            <select 
+              value={language} 
+              onChange={(e) => setLanguage(e.target.value)} 
+              className="rt-select"
+            >
               <option value="auto">Auto (detect + English)</option>
               <option value="en">English</option>
               <option value="hi">Hindi</option>
@@ -194,32 +204,34 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
               <option value="gu">Gujarati</option>
             </select>
           </label>
+          
+          <div className="rt-controls">
+            {!isCapturing ? (
+              <button
+                onClick={handleStart}
+                disabled={status === 'starting' || !enabled}
+                className="btn-start"
+                title={!enabled ? 'Accept consent to enable transcription' : 'Start transcription'}
+              >
+                {status === 'starting' ? 'Starting...' : '🎤 Start'}
+              </button>
+            ) : (
+              <button
+                onClick={handleStop}
+                disabled={status === 'stopping'}
+                className="btn-stop"
+              >
+                {status === 'stopping' ? 'Stopping...' : '⏹ Stop'}
+              </button>
+            )}
+          </div>
         </div>
+        
         {!enabled && (
-          <div className="rt-warning" style={{ color: '#ff9500', fontSize: '13px', marginTop: '4px' }}>
+          <div className="rt-warning">
             ⚠️ Consent required - Reload page to accept recording consent
           </div>
         )}
-        <div className="rt-controls">
-          {!isCapturing ? (
-            <button
-              onClick={handleStart}
-              disabled={status === 'starting' || !enabled}
-              className="btn-start"
-              title={!enabled ? 'Accept consent to enable transcription' : 'Start transcription'}
-            >
-              {status === 'starting' ? 'Starting...' : '🎤 Start'}
-            </button>
-          ) : (
-            <button
-              onClick={handleStop}
-              disabled={status === 'stopping'}
-              className="btn-stop"
-            >
-              {status === 'stopping' ? 'Stopping...' : '⏹ Stop'}
-            </button>
-          )}
-        </div>
       </div>
 
       {isCapturing && (
