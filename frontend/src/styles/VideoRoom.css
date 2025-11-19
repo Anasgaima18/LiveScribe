@@ -161,21 +161,21 @@
 
 .lk-control-bar {
   position: fixed !important;
-  background: rgba(20, 20, 25, 0.9) !important;
+  background: rgba(20, 20, 25, 0.95) !important;
   backdrop-filter: saturate(180%) blur(20px) !important;
   -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
-  border: 0.5px solid rgba(255, 255, 255, 0.18) !important;
-  border-radius: 24px !important;
-  padding: 8px 14px !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 28px !important;
+  padding: 10px 16px !important;
   bottom: 24px !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 0 0.5px rgba(255, 255, 255, 0.1) inset !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), 0 0 0 0.5px rgba(255, 255, 255, 0.15) inset !important;
   max-width: fit-content !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
   z-index: 1000 !important;
   display: flex !important;
   align-items: center !important;
-  gap: 4px !important;
+  gap: 6px !important;
 }
 
 /* Force icon-only controls: hide any textual labels inside buttons */
@@ -194,17 +194,17 @@
 
 .lk-button {
   color: white !important;
-  background: rgba(255, 255, 255, 0.1) !important;
-  border: none !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
   border-radius: 50% !important;
-  width: 48px !important;
-  height: 48px !important;
-  min-width: 48px !important;
-  min-height: 48px !important;
+  width: 50px !important;
+  height: 50px !important;
+  min-width: 50px !important;
+  min-height: 50px !important;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
   margin: 0 !important;
   padding: 0 !important;
-  box-shadow: none !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -214,8 +214,10 @@
 }
 
 .lk-button:hover {
-  background: rgba(255, 255, 255, 0.2) !important;
-  transform: scale(1.1) !important;
+  background: rgba(255, 255, 255, 0.25) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  transform: scale(1.08) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
 }
 
 .lk-button:active {
@@ -224,22 +226,27 @@
 }
 
 .lk-button svg {
-  width: 22px !important;
-  height: 22px !important;
+  width: 24px !important;
+  height: 24px !important;
   position: relative !important;
   z-index: 1 !important;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3)) !important;
 }
 
 /* Muted/Off state (red) */
 .lk-button[data-lk-source="microphone"][aria-pressed="true"],
 .lk-button[data-lk-source="camera"][aria-pressed="true"] {
   background: rgba(255, 59, 48, 1) !important;
+  border-color: rgba(255, 59, 48, 1) !important;
+  box-shadow: 0 2px 12px rgba(255, 59, 48, 0.4) !important;
 }
 
 .lk-button[data-lk-source="microphone"][aria-pressed="true"]:hover,
 .lk-button[data-lk-source="camera"][aria-pressed="true"]:hover {
   background: rgba(255, 69, 58, 1) !important;
-  transform: scale(1.1) !important;
+  border-color: rgba(255, 69, 58, 1) !important;
+  transform: scale(1.08) !important;
+  box-shadow: 0 4px 16px rgba(255, 59, 48, 0.5) !important;
 }
 
 .lk-button-group {
@@ -253,16 +260,17 @@
 .lk-button.lk-disconnect-button,
 button[data-lk-disconnect] {
   background: transparent !important;
-  border: 1.5px solid rgba(255, 59, 48, 0.8) !important;
+  border: 2px solid rgba(255, 59, 48, 0.9) !important;
   color: rgba(255, 59, 48, 1) !important;
   width: auto !important;
-  min-width: 90px !important;
-  height: 48px !important;
-  border-radius: 24px !important;
-  padding: 0 20px !important;
-  font-weight: 600 !important;
-  font-size: 0.9rem !important;
+  min-width: 100px !important;
+  height: 50px !important;
+  border-radius: 25px !important;
+  padding: 0 24px !important;
+  font-weight: 700 !important;
+  font-size: 0.95rem !important;
   margin-left: 8px !important;
+  box-shadow: 0 2px 8px rgba(255, 59, 48, 0.2) !important;
 }
 
 .lk-disconnect-button:hover,
@@ -272,6 +280,7 @@ button[data-lk-disconnect]:hover {
   color: white !important;
   border-color: rgba(255, 59, 48, 1) !important;
   transform: scale(1.05) !important;
+  box-shadow: 0 4px 16px rgba(255, 59, 48, 0.4) !important;
 }
 
 /* Separator before leave button */
