@@ -143,9 +143,10 @@
 .empty-message {
   text-align: center;
   padding: 48px 24px;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1rem;
   line-height: 1.6;
+  font-weight: 500;
 }
 
 .transcript-content {
@@ -511,27 +512,37 @@
 
 .summary-content {
   padding: 20px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-md);
-  border: 1px solid var(--glass-border);
+  border: 2px solid rgba(41, 151, 255, 0.3);
+}
+
+.summary-text {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .summary-text h3 {
-  color: var(--accent-primary);
-  font-size: 1.1rem;
+  color: #ffffff;
+  font-size: 1.2rem;
   font-weight: 700;
   margin: 0 0 16px 0;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 2px solid rgba(41, 151, 255, 0.4);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .summary-text p {
-  color: white;
+  color: #ffffff;
   line-height: 1.8;
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 1rem;
   white-space: pre-wrap;
   word-wrap: break-word;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  font-weight: 400;
 }
 
 .transcript-item {
