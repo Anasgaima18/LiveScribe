@@ -17,7 +17,7 @@ const VideoRoom = () => {
   const { user } = useAuth();
   const socket = useSocket();
   const navigate = useNavigate();
-  
+
   const [token, setToken] = useState('');
   const [serverUrl, setServerUrl] = useState(import.meta.env.VITE_LIVEKIT_URL || '');
   const [loading, setLoading] = useState(true);
@@ -32,34 +32,34 @@ const VideoRoom = () => {
   const fetchToken = useCallback(async () => {
     try {
       console.log('[VideoRoom] Fetching LiveKit token for room:', roomId);
-      
+
       const { data } = await api.get('/livekit/token', {
         params: {
           roomName: roomId,
           participantName: user.name
         }
       });
-      
+
       if (!isMountedRef.current) return;
-      
+
       console.log('[VideoRoom] Token received, LiveKit URL:', data.url);
       console.log('[VideoRoom] Room name:', data.roomName);
-      
+
       setToken(data.token);
       if (data.url) {
         setServerUrl(data.url);
       }
-      
+
       const callResponse = await api.post('/calls', { roomId });
-      
+
       if (!isMountedRef.current) return;
-      
+
       setCallId(callResponse.data._id);
       setLoading(false);
     } catch (err) {
       console.error('[VideoRoom] Error fetching token:', err);
       console.error('[VideoRoom] Error details:', err.response?.data);
-      
+
       if (isMountedRef.current) {
         const errorMsg = err.response?.data?.message || 'Failed to join room. Please check LiveKit configuration.';
         setError(errorMsg);
@@ -73,7 +73,7 @@ const VideoRoom = () => {
     if (socket && roomId) {
       console.log(`[VideoRoom] Joining socket room: ${roomId}`);
       socket.emit('call:join', { roomId });
-      
+
       return () => {
         console.log(`[VideoRoom] Leaving socket room: ${roomId}`);
         socket.emit('call:leave', { roomId });
@@ -86,12 +86,12 @@ const VideoRoom = () => {
       navigate('/login');
       return;
     }
-    
+
     fetchToken();
-    
+
     // Install error suppressors for LiveKit internal errors
     const cleanupErrorSuppressors = installAllErrorSuppressors();
-    
+
     // Cleanup function
     return () => {
       isMountedRef.current = false;
@@ -101,7 +101,7 @@ const VideoRoom = () => {
 
   const handleLeaveCall = useCallback(async () => {
     setIsConnected(false);
-    
+
     if (callId) {
       try {
         await api.put(`/calls/${callId}/end`);
@@ -109,7 +109,7 @@ const VideoRoom = () => {
         console.error('Error ending call:', err);
       }
     }
-    
+
     // Small delay to allow LiveKit to cleanup
     setTimeout(() => {
       if (isMountedRef.current) {
@@ -117,14 +117,14 @@ const VideoRoom = () => {
       }
     }, 300);
   }, [callId, navigate]);
-  
+
   const handleDisconnected = useCallback(() => {
     // Only log disconnections, don't navigate away
     // This allows LiveKit to reconnect automatically
     console.log('[VideoRoom] 🔄 Temporarily disconnected from LiveKit - Auto-reconnecting...');
     setIsConnected(false);
   }, []);
-  
+
   const handleConnected = useCallback(() => {
     console.log('[VideoRoom] ✅ Successfully connected to LiveKit room');
     setIsConnected(true);
@@ -133,36 +133,36 @@ const VideoRoom = () => {
       setShowTranscripts(true);
     }
   }, []);
-  
+
   const handleError = useCallback((error) => {
     console.error('[VideoRoom] ❌ LiveKit error:', error);
     console.error('[VideoRoom] Error code:', error?.code);
     console.error('[VideoRoom] Error message:', error?.message);
-    
+
     // Suppress internal LiveKit errors that don't affect functionality
     const errorMessage = error?.message || String(error);
-    if (errorMessage.includes('Element not part of the array') || 
-        errorMessage.includes('placeholder')) {
+    if (errorMessage.includes('Element not part of the array') ||
+      errorMessage.includes('placeholder')) {
       // These are internal LiveKit DOM management errors that can be ignored
       return;
     }
-    
+
     // Handle connection errors
-    if (error?.code === 'CONNECTION_FAILED' || 
-        error?.code === 'ROOM_DISCONNECTED' ||
-        errorMessage.includes('peerconnection failed') ||
-        errorMessage.includes('WebSocket')) {
+    if (error?.code === 'CONNECTION_FAILED' ||
+      error?.code === 'ROOM_DISCONNECTED' ||
+      errorMessage.includes('peerconnection failed') ||
+      errorMessage.includes('WebSocket')) {
       console.error('[VideoRoom] Connection issue detected. Possible causes:');
       console.error('  - LiveKit server is down or unreachable');
       console.error('  - Invalid API credentials');
       console.error('  - Network/firewall blocking WebSocket connection');
       console.error('  - STUN/TURN server configuration issue');
-      
+
       // Run diagnostics
       if (token) {
         diagnoseConnectionFailure(import.meta.env.VITE_LIVEKIT_URL, token).catch(console.error);
       }
-      
+
       setError(
         'Unable to establish video connection. This could be due to:\n' +
         '• LiveKit server configuration issues\n' +
@@ -194,7 +194,7 @@ const VideoRoom = () => {
         onAccept={() => { setHasConsent(true); setShowConsent(false); }}
         onDecline={() => { setHasConsent(false); setShowConsent(false); }}
       />
-      
+
       {/* Connection Status Indicators */}
       {!isConnected && (
         <div className="connection-status">
@@ -203,12 +203,12 @@ const VideoRoom = () => {
           <small>Establishing secure peer-to-peer connection</small>
         </div>
       )}
-      
+
       <LiveKitRoom
         token={token}
         serverUrl={serverUrl}
         data-lk-theme="default"
-        style={{ height: '100vh' }}
+        className="video-room-container"
         onConnected={handleConnected}
         onDisconnected={handleDisconnected}
         onError={handleError}
@@ -242,7 +242,7 @@ const VideoRoom = () => {
         <div className="room-header">
           <h3>Room: {roomId}</h3>
           <div className="room-actions">
-            <button 
+            <button
               onClick={() => setShowTranscripts(!showTranscripts)}
               className="btn-transcript"
             >
@@ -255,24 +255,14 @@ const VideoRoom = () => {
         </div>
 
         {/* Main Video Conference - Full Screen */}
-        <VideoConference 
-          style={{ 
-            width: '100%', 
-            height: '100%',
-            position: 'absolute',
-            top: '65px',
-            left: 0,
-            right: 0,
-            bottom: 0
-          }}
-        />
-        
+        <VideoConference className="fullscreen-conference" />
+
         {/* Audio Controls - Auto-prompt for user interaction */}
-        <div style={{ position: 'absolute', top: '80px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000 }}>
+        <div className="audio-prompt-container">
           <StartAudio label="🔊 Click to Enable Audio" />
         </div>
         <RoomAudioRenderer />
-        
+
         {/* Transcript Panel - Overlay on right */}
         {showTranscripts && callId && (
           <div className="transcript-overlay">

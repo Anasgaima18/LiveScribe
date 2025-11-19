@@ -33,9 +33,9 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
         // If final, append as new entry
         if (segment.isPartial && prev.length > 0 && prev[prev.length - 1].isPartial) {
           const updated = [...prev];
-          updated[updated.length - 1] = { 
-            userName, 
-            text: segment.text, 
+          updated[updated.length - 1] = {
+            userName,
+            text: segment.text,
             isPartial: true,
             originalText: segment.originalText,
             translatedText: segment.translatedText,
@@ -43,9 +43,9 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
           };
           return updated;
         }
-        return [...prev, { 
-          userName, 
-          text: segment.text, 
+        return [...prev, {
+          userName,
+          text: segment.text,
           isPartial: segment.isPartial,
           originalText: segment.originalText,
           translatedText: segment.translatedText,
@@ -60,7 +60,7 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
       console.log('Transcription status:', { status, provider, reason });
       setProviderStatus(status);
       if (provider) setProviderName(provider);
-      
+
       if (status === 'active') {
         setStatus('active');
       } else if (status === 'error') {
@@ -83,7 +83,7 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
 
     setStatus('starting');
     try {
-  if (mode === 'browser' && (('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window))) {
+      if (mode === 'browser' && (('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window))) {
         // Browser speech recognition fallback
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
@@ -115,16 +115,16 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
         setProviderName('browser');
       } else {
         // Server-side (Sarvam) mode
-  console.log('Starting Sarvam transcription for room:', roomId, 'lang:', language);
-  socket.emit('transcription:start', { roomId, language });
-        
+        console.log('Starting Sarvam transcription for room:', roomId, 'lang:', language);
+        socket.emit('transcription:start', { roomId, language });
+
         // Start audio capture and stream chunks to backend
         await startCapture((base64Chunk, meta) => {
           if (base64Chunk && base64Chunk.length > 0) {
             socket.emit('transcription:audio', { chunk: base64Chunk, meta });
           }
         });
-        
+
         setProviderName('sarvam');
         console.log('Audio capture started, waiting for backend confirmation...');
       }
@@ -142,7 +142,7 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
 
     setStatus('stopping');
     if (window.__rt_recognition) {
-      try { window.__rt_recognition.stop(); } catch {}
+      try { window.__rt_recognition.stop(); } catch { }
       window.__rt_recognition = null;
     }
     stopCapture();

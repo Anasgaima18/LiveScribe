@@ -3,111 +3,132 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(32, 32, 36, 0.95), rgba(20, 20, 24, 0.98));
-  padding: 20px;
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  padding: var(--spacing-lg);
 }
 
-.error-boundary-container {
+.error-content {
+  background: var(--glass-bg);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  padding: 48px;
   max-width: 600px;
   width: 100%;
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(20px);
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 48px 32px;
   text-align: center;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-xl);
+  animation: fadeIn 0.5s ease;
 }
 
 .error-icon {
-  font-size: 64px;
-  margin-bottom: 24px;
-  animation: bounce 2s infinite;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 24px;
+  background: rgba(255, 69, 58, 0.1);
+  border: 2px solid rgba(255, 69, 58, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
 }
 
-@keyframes bounce {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
+.error-content h1 {
+  color: var(--text-primary);
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0 0 16px 0;
 }
 
-.error-boundary h1 {
-  color: #ffffff;
-  font-size: 28px;
-  font-weight: 600;
-  margin-bottom: 16px;
-}
-
-.error-message {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 16px;
+.error-content p {
+  color: var(--text-secondary);
+  font-size: 1rem;
   line-height: 1.6;
-  margin-bottom: 32px;
+  margin: 0 0 24px 0;
 }
 
 .error-details {
-  margin: 24px 0;
-  text-align: left;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 12px;
+  background: rgba(255, 69, 58, 0.05);
+  border: 1px solid rgba(255, 69, 58, 0.2);
+  border-radius: var(--radius-md);
   padding: 16px;
-  border: 1px solid rgba(255, 100, 100, 0.2);
+  margin-bottom: 24px;
+  text-align: left;
 }
 
 .error-details summary {
+  color: var(--accent-danger);
+  font-weight: 600;
   cursor: pointer;
-  color: #ff6b6b;
-  font-weight: 500;
-  margin-bottom: 12px;
+  user-select: none;
+  margin-bottom: 8px;
 }
 
-.error-stack {
-  color: #ffcccc;
-  font-family: 'Courier New', monospace;
-  font-size: 12px;
+.error-details pre {
+  color: var(--text-muted);
+  font-size: 0.85rem;
   overflow-x: auto;
   white-space: pre-wrap;
-  word-break: break-word;
-  margin: 12px 0 0 0;
+  word-wrap: break-word;
+  margin: 0;
 }
 
 .error-actions {
   display: flex;
   gap: 12px;
   justify-content: center;
-  flex-wrap: wrap;
 }
 
-.error-actions button {
+.btn-reload,
+.btn-home {
   padding: 12px 32px;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 500;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.95rem;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all var(--transition-fast);
+}
+
+.btn-reload {
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  color: white;
   border: none;
+  box-shadow: 0 4px 12px rgba(41, 151, 255, 0.3);
 }
 
-.btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.btn-primary:hover {
+.btn-reload:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 6px 16px rgba(41, 151, 255, 0.4);
 }
 
-.btn-secondary {
+.btn-home {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  border: 1px solid var(--glass-border);
+}
+
+.btn-home:hover {
   background: rgba(255, 255, 255, 0.1);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
 }
 
-.btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.15);
-  transform: translateY(-2px);
+/* Responsive */
+@media (max-width: 768px) {
+  .error-content {
+    padding: 32px 24px;
+  }
+
+  .error-content h1 {
+    font-size: 1.5rem;
+  }
+
+  .error-actions {
+    flex-direction: column;
+  }
+
+  .btn-reload,
+  .btn-home {
+    width: 100%;
+  }
 }
