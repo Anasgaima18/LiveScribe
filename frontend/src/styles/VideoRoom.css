@@ -1,139 +1,152 @@
+:root{
+  /* Colors */
+  --bg: #0b0b0c;
+  --glass: rgba(255,255,255,0.08);
+  --glass-strong: rgba(255,255,255,0.15);
+  --glass-border: rgba(255,255,255,0.12);
+  --accent: #2997ff; /* transcript border */
+  --green: #34c759;
+  --red: #ff3b30;
+  --muted-text: rgba(255,255,255,0.65);
+  --text: #fff;
+
+  /* Sizes */
+  --control-size: 50px;
+  --control-gap: 8px;
+  --radius-sm: 8px;
+  --radius-lg: 14px;
+  --radius-full: 999px;
+
+  /* Motion */
+  --ease-fast: cubic-bezier(.4,0,.2,1);
+  --transition-fast: 180ms var(--ease-fast);
+}
+
+/* --------------------------
+   Layout: main room container
+   -------------------------- */
 .video-room-container {
   position: relative;
-  height: 100vh;
+  min-height: 100vh;
   background: #000;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, sans-serif;
   overflow: hidden;
+  color: var(--text);
 }
 
-.connection-status {
+/* --------------------------
+   Connection status overlay
+   -------------------------- */
+.connection-status{
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-  z-index: 1000;
-  background: rgba(21, 21, 32, 0.8);
-  backdrop-filter: blur(40px);
-  -webkit-backdrop-filter: blur(40px);
-  padding: 32px 48px;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 1100;
+  pointer-events: none; /* leave click-through unless shown */
+}
+.connection-status__box{
+  pointer-events: auto;
+  background: rgba(21,21,32,0.88);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  padding: 28px 40px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--glass-border);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  text-align: center;
+  max-width: 420px;
 }
 
-.reconnecting-spinner {
+/* spinner */
+.reconnecting-spinner{
   width: 40px;
   height: 40px;
   margin: 0 auto 16px;
-  border: 3px solid rgba(255, 255, 255, 0.1);
-  border-top: 3px solid var(--accent-primary);
+  border: 3px solid rgba(255,255,255,0.08);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
+@keyframes spin{ to{ transform: rotate(360deg);} }
 
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-
-  100% {
-    transform: rotate(360deg);
-  }
+.connection-status__title{
+  font-weight: 700;
+  font-size: 1.05rem;
+  margin: 0 0 6px;
+  color: var(--text);
 }
-
-.connection-status p {
-  color: var(--text-primary);
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin: 0 0 8px 0;
-}
-
-.connection-status small {
-  color: var(--text-secondary);
+.connection-status__sub{
   font-size: 0.9rem;
+  color: var(--muted-text);
 }
 
-.room-header {
+/* --------------------------
+   Page header
+   -------------------------- */
+.room-header{
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.7) 70%, transparent 100%);
-  padding: 20px 32px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  z-index: 100;
+  left: 0; right: 0; top: 0;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding: 18px 28px;
+  z-index: 900;
   pointer-events: none;
+  background: linear-gradient(180deg, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 70%, transparent 100%);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
 }
+.room-header > * { pointer-events: auto; }
 
-.room-header>* {
-  pointer-events: auto;
-}
-
-.room-header h3 {
-  color: white;
+.room-header h3{
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 700;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
-  letter-spacing: 0.3px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.7);
 }
 
-.room-actions {
-  display: flex;
-  gap: 16px;
-}
+/* header action buttons */
+.room-actions{ display:flex; gap: 12px; align-items:center; }
 
-.btn-transcript,
-.btn-leave {
-  padding: 12px 24px;
-  border: none;
-  border-radius: var(--radius-full);
-  font-weight: 600;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  white-space: nowrap;
-  display: inline-flex;
-  align-items: center;
+/* shared button base */
+.btn {
+  display:inline-flex;
+  align-items:center;
   gap: 8px;
+  padding: 10px 18px;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.92rem;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  text-decoration: none;
+  color: var(--text);
 }
 
-.btn-transcript {
-  background: rgba(255, 255, 255, 0.15);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+/* transcript button */
+.btn-transcript{
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.12);
 }
+.btn-transcript:hover{ transform: translateY(-2px); background: rgba(255,255,255,0.12); }
 
-.btn-transcript:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+/* leave button */
+.btn-leave{
+  background: linear-gradient(180deg, rgba(255,59,48,0.95), rgba(255,59,48,0.85));
+  box-shadow: 0 6px 16px rgba(255,59,48,0.18);
+  border: none;
+  color: #fff;
 }
+.btn-leave:hover{ transform: translateY(-2px); box-shadow: 0 10px 24px rgba(255,69,58,0.22); }
 
-.btn-leave {
-  background: rgba(255, 59, 48, 0.9);
-  color: white;
-  box-shadow: 0 4px 12px rgba(255, 59, 48, 0.4);
-  font-weight: 700;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-}
-
-.btn-leave:hover {
-  background: #ff3b30;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(255, 69, 58, 0.4);
-}
-
-/* LiveKit Overrides */
+/* --------------------------
+   LiveKit overrides
+   -------------------------- */
 .lk-room-container {
   background: #000 !important;
 }
@@ -159,28 +172,29 @@
   border-color: rgba(255, 255, 255, 0.2) !important;
 }
 
-.lk-control-bar {
+/* --------------------------
+   Control bar (bottom, centered)
+   -------------------------- */
+.lk-control-bar{
   position: fixed !important;
-  background: rgba(20, 20, 25, 0.95) !important;
-  backdrop-filter: saturate(180%) blur(20px) !important;
-  -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
-  border: 0.5px solid rgba(255, 255, 255, 0.2) !important;
-  border-radius: 28px !important;
-  padding: 10px 16px !important;
-  bottom: 24px !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), 0 0 0 0.5px rgba(255, 255, 255, 0.15) inset !important;
-  max-width: fit-content !important;
   left: 50% !important;
+  bottom: 24px !important;
   transform: translateX(-50%) !important;
   z-index: 1000 !important;
   display: flex !important;
   align-items: center !important;
-  gap: 6px !important;
-  flex-wrap: nowrap !important;
-  overflow: visible !important;
+  gap: var(--control-gap) !important;
+  padding: 10px 14px !important;
+  border-radius: 28px !important;
+  background: rgba(18,18,22,0.88) !important;
+  border: 1px solid rgba(255,255,255,0.06) !important;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6) !important;
+  max-width: calc(100% - 48px) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
 }
 
-/* Force icon-only controls: hide any textual labels inside buttons */
+/* Hide text labels - icon only */
 .lk-control-bar .lk-button {
   font-size: 0 !important;
 }
@@ -189,173 +203,155 @@
   display: none !important;
 }
 
-/* Hide dropdown toggle buttons (the empty circles next to mic/camera) */
+/* Hide dropdown toggle buttons */
 .lk-button-group .lk-button:last-child:not([data-lk-source]),
 .lk-button[aria-haspopup="menu"],
 .lk-button[data-lk-toggle],
-button.lk-button.lk-button-menu {
-  display: none !important;
-}
-
-/* Hide dropdown menus text */
-.lk-control-bar .lk-button-group-menu {
-  min-width: auto !important;
-}
-
-.lk-button {
-  color: white !important;
-  background: rgba(255, 255, 255, 0.12) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  border-radius: 50% !important;
-  width: 50px !important;
-  height: 50px !important;
-  min-width: 50px !important;
-  min-height: 50px !important;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  position: relative !important;
-  overflow: visible !important;
-  cursor: pointer !important;
-}
-
-.lk-button:hover {
-  background: rgba(255, 255, 255, 0.25) !important;
-  border-color: rgba(255, 255, 255, 0.3) !important;
-  transform: scale(1.08) !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
-}
-
-.lk-button:active {
-  transform: scale(0.95) !important;
-  transition: all 0.1s !important;
-}
-
-/* Active/enabled state for devices (mic, camera on) */
-.lk-button[data-lk-source="microphone"]:not([aria-pressed="true"]),
-.lk-button[data-lk-source="camera"]:not([aria-pressed="true"]) {
-  background: rgba(52, 199, 89, 0.2) !important;
-  border-color: rgba(52, 199, 89, 0.4) !important;
-}
-
-.lk-button[data-lk-source="microphone"]:not([aria-pressed="true"]):hover,
-.lk-button[data-lk-source="camera"]:not([aria-pressed="true"]):hover {
-  background: rgba(52, 199, 89, 0.3) !important;
-  border-color: rgba(52, 199, 89, 0.5) !important;
-  box-shadow: 0 4px 16px rgba(52, 199, 89, 0.3) !important;
-}
-
-.lk-button svg {
-  width: 24px !important;
-  height: 24px !important;
-  position: relative !important;
-  z-index: 1 !important;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3)) !important;
-}
-
-/* Ensure dropdown toggle icons are visible */
-.lk-button .lk-button-icon svg,
-.lk-button svg[data-icon],
-.lk-button-group .lk-button svg {
-  display: block !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
-/* Muted/Off state (red) */
-.lk-button[data-lk-source="microphone"][aria-pressed="true"],
-.lk-button[data-lk-source="camera"][aria-pressed="true"] {
-  background: rgba(255, 59, 48, 1) !important;
-  border-color: rgba(255, 59, 48, 1) !important;
-  box-shadow: 0 2px 12px rgba(255, 59, 48, 0.4) !important;
-}
-
-.lk-button[data-lk-source="microphone"][aria-pressed="true"]:hover,
-.lk-button[data-lk-source="camera"][aria-pressed="true"]:hover {
-  background: rgba(255, 69, 58, 1) !important;
-  border-color: rgba(255, 69, 58, 1) !important;
-  transform: scale(1.08) !important;
-  box-shadow: 0 4px 16px rgba(255, 59, 48, 0.5) !important;
-}
-
-.lk-button-group {
-  gap: 6px !important;
-  display: flex !important;
-  align-items: center !important;
-}
-
-/* Hide the settings/more options button */
+button.lk-button.lk-button-menu,
 .lk-button[data-lk-settings],
 .lk-button[aria-label*="Settings"],
 .lk-button[aria-label*="More"] {
   display: none !important;
 }
 
-/* Custom Leave button styling if using custom button */
+/* generic circular control button */
+.lk-control-bar .lk-button{
+  width: var(--control-size) !important;
+  height: var(--control-size) !important;
+  min-width: var(--control-size) !important;
+  min-height: var(--control-size) !important;
+  border-radius: 50% !important;
+  display: inline-flex !important;
+  place-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 1px solid rgba(255,255,255,0.06) !important;
+  background: rgba(255,255,255,0.06) !important;
+  color: var(--text) !important;
+  transition: transform 160ms var(--ease-fast), background var(--transition-fast), box-shadow var(--transition-fast) !important;
+  cursor: pointer !important;
+}
+
+/* hover & active */
+.lk-control-bar .lk-button:hover{ 
+  transform: scale(1.08) !important; 
+  background: rgba(255,255,255,0.12) !important; 
+  box-shadow: 0 6px 18px rgba(0,0,0,0.2) !important; 
+}
+.lk-control-bar .lk-button:active{ transform: scale(0.96) !important; }
+
+/* Icon inside button */
+.lk-control-bar .lk-button svg{ 
+  width: 24px !important; 
+  height: 24px !important; 
+  display:block !important; 
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3)) !important;
+}
+
+/* device states
+   Use aria-pressed="true" for OFF (muted/disabled),
+   and aria-pressed="false" or absent for ON state.
+*/
+.lk-button[data-lk-source="microphone"]:not([aria-pressed="true"]),
+.lk-button[data-lk-source="camera"]:not([aria-pressed="true"]){
+  /* default 'on' appearance subtly green */
+  background: rgba(52,199,89,0.15) !important;
+  border-color: rgba(52,199,89,0.25) !important;
+}
+
+.lk-button[data-lk-source="microphone"]:not([aria-pressed="true"]):hover,
+.lk-button[data-lk-source="camera"]:not([aria-pressed="true"]):hover{
+  background: rgba(52,199,89,0.25) !important;
+  border-color: rgba(52,199,89,0.35) !important;
+  box-shadow: 0 6px 18px rgba(52,199,89,0.2) !important;
+}
+
+.lk-button[data-lk-source="microphone"][aria-pressed="true"],
+.lk-button[data-lk-source="camera"][aria-pressed="true"]{
+  /* muted/off state (red) */
+  background: rgba(255,59,48,1) !important;
+  border-color: rgba(255,59,48,1) !important;
+  box-shadow: 0 6px 18px rgba(255,59,48,0.18) !important;
+}
+
+.lk-button[data-lk-source="microphone"][aria-pressed="true"]:hover,
+.lk-button[data-lk-source="camera"][aria-pressed="true"]:hover{
+  background: rgba(255,69,58,1) !important;
+  border-color: rgba(255,69,58,1) !important;
+  box-shadow: 0 8px 24px rgba(255,59,48,0.3) !important;
+}
+
+/* group separators */
+.lk-button-group{ 
+  display:flex !important; 
+  gap: var(--control-gap) !important; 
+  align-items:center !important; 
+}
+
+/* "Leave" as larger pill inside control bar */
 .lk-disconnect-button,
 .lk-button.lk-disconnect-button,
-button[data-lk-disconnect] {
-  background: transparent !important;
-  border: 2px solid rgba(255, 59, 48, 0.9) !important;
-  color: rgba(255, 59, 48, 1) !important;
-  width: auto !important;
-  min-width: 100px !important;
-  height: 50px !important;
+button[data-lk-disconnect]{
+  margin-left: 8px !important;
+  padding: 0 18px !important;
   border-radius: 25px !important;
-  padding: 0 24px !important;
+  min-width: 110px !important;
+  width: auto !important;
+  height: 50px !important;
   font-weight: 700 !important;
   font-size: 0.95rem !important;
-  margin-left: 8px !important;
-  box-shadow: 0 2px 8px rgba(255, 59, 48, 0.2) !important;
+  background: transparent !important;
+  border: 2px solid rgba(255,59,48,0.9) !important;
+  color: rgba(255,59,48,1) !important;
+  box-shadow: 0 2px 8px rgba(255,59,48,0.15) !important;
 }
-
 .lk-disconnect-button:hover,
 .lk-button.lk-disconnect-button:hover,
-button[data-lk-disconnect]:hover {
-  background: rgba(255, 59, 48, 1) !important;
-  color: white !important;
-  border-color: rgba(255, 59, 48, 1) !important;
-  transform: scale(1.05) !important;
-  box-shadow: 0 4px 16px rgba(255, 59, 48, 0.4) !important;
+button[data-lk-disconnect]:hover{ 
+  background: rgba(255,59,48,1) !important; 
+  color: #fff !important; 
+  transform: scale(1.04) !important; 
+  box-shadow: 0 6px 18px rgba(255,59,48,0.3) !important;
 }
 
-/* Separator before leave button */
-.lk-disconnect-button::before,
-button[data-lk-disconnect]::before {
-  content: '' !important;
-  position: absolute !important;
-  left: -12px !important;
-  width: 1px !important;
-  height: 24px !important;
-  background: rgba(255, 255, 255, 0.15) !important;
-}
-
-.lk-button-group + .lk-button-group::before {
-  content: '' !important;
-  width: 1px !important;
-  height: 24px !important;
-  background: rgba(255, 255, 255, 0.15) !important;
-  margin: 0 4px !important;
-}
-
-.transcript-overlay {
-  position: absolute;
-  top: 90px;
+/* --------------------------
+   Transcript overlay (right side)
+   -------------------------- */
+.transcript-overlay{
+  position: fixed;
+  top: 92px;
   right: 24px;
   width: 420px;
   height: calc(100vh - 200px);
-  background: rgba(21, 21, 32, 0.98);
-  backdrop-filter: blur(40px);
-  -webkit-backdrop-filter: blur(40px);
-  border: 1px solid rgba(41, 151, 255, 0.2);
+  background: rgba(21,21,32,0.98);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border-radius: var(--radius-lg);
-  z-index: 150;
+  border: 1px solid rgba(41,151,255,0.12);
+  box-shadow: -8px 0 32px rgba(0,0,0,0.5);
+  z-index: 950;
   overflow: hidden;
-  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
+}
+
+/* --------------------------
+   Focus styles (accessibility)
+   -------------------------- */
+.lk-button:focus,
+.btn:focus,
+.lk-disconnect-button:focus{
+  outline: 3px solid rgba(41,151,255,0.14);
+  outline-offset: 3px;
+  box-shadow: 0 6px 18px rgba(41,151,255,0.06);
+}
+
+/* --------------------------
+   Responsive tweaks
+   -------------------------- */
+@media (max-width: 720px){
+  .transcript-overlay{ display:none; } /* hide to maximize space */
+  .lk-control-bar{ left: 12px !important; transform: none !important; right: 12px !important; bottom: 18px !important; justify-content:center !important; padding: 8px !important; }
+  .room-header{ padding: 12px 16px; }
 }

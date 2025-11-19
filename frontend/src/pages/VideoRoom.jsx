@@ -198,9 +198,11 @@ const VideoRoom = () => {
       {/* Connection Status Indicators */}
       {!isConnected && (
         <div className="connection-status">
-          <div className="reconnecting-spinner"></div>
-          <p>🔄 Connecting to LiveKit...</p>
-          <small>Establishing secure peer-to-peer connection</small>
+          <div className="connection-status__box">
+            <div className="reconnecting-spinner"></div>
+            <p className="connection-status__title">🔄 Connecting to LiveKit...</p>
+            <small className="connection-status__sub">Establishing secure peer-to-peer connection</small>
+          </div>
         </div>
       )}
 
