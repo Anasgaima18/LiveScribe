@@ -226,7 +226,7 @@ button.lk-button.lk-button-menu,
   min-height: var(--control-size) !important;
   border-radius: 50% !important;
   display: inline-flex !important;
-  place-items: center !important;
+  align-items: center !important;
   justify-content: center !important;
   padding: 0 !important;
   margin: 0 !important;
@@ -235,6 +235,7 @@ button.lk-button.lk-button-menu,
   color: var(--text) !important;
   transition: transform 160ms var(--ease-fast), background var(--transition-fast), box-shadow var(--transition-fast) !important;
   cursor: pointer !important;
+  position: relative !important;
 }
 
 /* hover & active */
@@ -249,8 +250,18 @@ button.lk-button.lk-button-menu,
 .lk-control-bar .lk-button svg{ 
   width: 24px !important; 
   height: 24px !important; 
-  display:block !important; 
+  display: block !important;
+  margin: auto !important;
+  flex-shrink: 0 !important;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3)) !important;
+}
+
+.lk-control-bar .lk-button .lk-button-icon{
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* device states
