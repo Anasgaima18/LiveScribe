@@ -161,50 +161,97 @@
 
 .lk-control-bar {
   position: fixed !important;
-  background: rgba(15, 15, 25, 0.98) !important;
-  backdrop-filter: blur(30px) !important;
-  border: 2px solid rgba(255, 255, 255, 0.2) !important;
-  border-radius: 16px !important;
-  padding: 16px 40px !important;
-  bottom: 24px !important;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.15) inset !important;
-  max-width: 95% !important;
+  background: rgba(30, 30, 35, 0.85) !important;
+  backdrop-filter: saturate(180%) blur(20px) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.18) !important;
+  border-radius: 20px !important;
+  padding: 12px 20px !important;
+  bottom: 20px !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 255, 255, 0.1) inset !important;
+  max-width: fit-content !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
-  z-index: 200 !important;
+  z-index: 1000 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
 }
 
 .lk-button {
   color: white !important;
-  background: rgba(255, 255, 255, 0.15) !important;
-  border: 2px solid rgba(255, 255, 255, 0.2) !important;
-  border-radius: 12px !important;
-  width: 60px !important;
-  height: 60px !important;
-  transition: all 0.2s ease !important;
-  margin: 0 6px !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  border: none !important;
+  border-radius: 50% !important;
+  width: 52px !important;
+  height: 52px !important;
+  min-width: 52px !important;
+  min-height: 52px !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.lk-button::before {
+  content: '' !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  width: 0 !important;
+  height: 0 !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  transform: translate(-50%, -50%) !important;
+  transition: width 0.3s, height 0.3s !important;
 }
 
 .lk-button:hover {
-  background: rgba(255, 255, 255, 0.3) !important;
-  transform: translateY(-2px) scale(1.05);
-  border-color: rgba(255, 255, 255, 0.4) !important;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5) !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+  transform: scale(1.08) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+.lk-button:hover::before {
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .lk-button:active {
-  transform: translateY(0) scale(0.98) !important;
+  transform: scale(0.95) !important;
+  transition: all 0.1s !important;
 }
 
 .lk-button svg {
-  width: 28px !important;
-  height: 28px !important;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  width: 24px !important;
+  height: 24px !important;
+  position: relative !important;
+  z-index: 1 !important;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3)) !important;
+}
+
+/* Active/pressed state for microphone and camera */
+.lk-button[aria-pressed="true"],
+.lk-button.lk-button-active {
+  background: rgba(255, 69, 58, 0.9) !important;
+  box-shadow: 0 4px 16px rgba(255, 69, 58, 0.4) !important;
+}
+
+.lk-button[aria-pressed="true"]:hover,
+.lk-button.lk-button-active:hover {
+  background: rgba(255, 69, 58, 1) !important;
+  transform: scale(1.08) !important;
 }
 
 .lk-button-group {
-  gap: 16px !important;
+  gap: 8px !important;
+  display: flex !important;
+  align-items: center !important;
 }
 
 .transcript-overlay {
