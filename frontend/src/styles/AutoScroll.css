@@ -1,0 +1,59 @@
+/* Auto-scroll button styling for transcription components */
+
+.btn-scroll-bottom {
+  position: sticky;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  background: rgba(0,122,255,0.92);
+  color: white;
+  border: none;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 590;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,122,255,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+  transition: all 350ms cubic-bezier(.25,.46,.45,.94);
+  animation: slideUpButton 0.3s ease-out;
+  z-index: 10;
+  margin-top: 12px;
+  white-space: nowrap;
+}
+
+.btn-scroll-bottom:hover {
+  transform: translateX(-50%) scale(1.05);
+  background: rgba(0,122,255,1);
+  box-shadow: 0 6px 16px rgba(0,122,255,0.5), inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+.btn-scroll-bottom:active {
+  transform: translateX(-50%) scale(0.98);
+}
+
+@keyframes slideUpButton {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .btn-scroll-bottom {
+    font-size: 0.75rem;
+    padding: 7px 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .btn-scroll-bottom {
+    font-size: 0.7rem;
+    padding: 6px 12px;
+  }
+}

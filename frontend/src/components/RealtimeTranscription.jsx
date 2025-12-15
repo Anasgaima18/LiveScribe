@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSocket } from '../context/SocketContext.jsx';
 import { useAudioCapture } from '../utils/audioCapture.js';
 import '../styles/RealtimeTranscription.css';
+import '../styles/AutoScroll.css';
 
 /**
  * RealtimeTranscription - UI control for Sarvam realtime transcription
@@ -18,6 +19,23 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
   const [providerName, setProviderName] = useState('');
   const [language, setLanguage] = useState('auto'); // 'auto' | 'en' | 'hi' | 'kn' | 'te' | 'ta' | 'gu' ...
   const [detectedLanguage, setDetectedLanguage] = useState('');
+  const [autoScroll, setAutoScroll] = useState(true);
+  const transcriptListRef = useRef(null);
+
+  // Auto-scroll to bottom when new transcript arrives
+  useEffect(() => {
+    if (autoScroll && transcriptListRef.current) {
+      transcriptListRef.current.scrollTop = transcriptListRef.current.scrollHeight;
+    }
+  }, [transcripts, autoScroll]);
+
+  // Detect manual scroll to disable auto-scroll
+  const handleScroll = () => {
+    if (!transcriptListRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = transcriptListRef.current;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+    setAutoScroll(isAtBottom);
+  };
 
   useEffect(() => {
     if (!socket || !enabled) return;
@@ -241,44 +259,48 @@ const RealtimeTranscription = ({ roomId, callId, enabled = true }) => {
         </div>
       )}
 
-      {providerStatus === 'error' && (
-        <div className="rt-error">
-          ⚠️ Transcription service error. Check console for details.
-        </div>
-      )}
-
-      {error && (
-        <div className="rt-error">
-          ⚠️ {error}
-        </div>
-      )}
-
-      <div className="rt-transcript-list">
+      <div className="rt-transcript-list" ref={transcriptListRef} onScroll={handleScroll}>
         {transcripts.length === 0 ? (
           <p className="rt-empty">Start recording to see realtime transcripts...</p>
         ) : (
-          transcripts.map((t, idx) => (
-            <div
-              key={idx}
-              className={`rt-item ${t.isPartial ? 'partial' : 'final'} ${t.dualMode ? 'dual-mode' : ''}`}
-            >
-              <span className="rt-speaker">{t.userName}:</span>
-              {t.dualMode ? (
-                <div className="rt-dual-content">
-                  <div className="rt-dual-row">
-                    <span className="rt-dual-label">Original ({t.language || 'detected'}):</span>
-                    <span className="rt-text rt-original">{t.originalText}</span>
+          <>
+            {transcripts.map((t, idx) => (
+              <div
+                key={idx}
+                className={`rt-item ${t.isPartial ? 'partial' : 'final'} ${t.dualMode ? 'dual-mode' : ''}`}
+              >
+                <span className="rt-speaker">{t.userName}:</span>
+                {t.dualMode ? (
+                  <div className="rt-dual-content">
+                    <div className="rt-dual-row">
+                      <span className="rt-dual-label">Original ({t.language || 'detected'}):</span>
+                      <span className="rt-text rt-original">{t.originalText}</span>
+                    </div>
+                    <div className="rt-dual-row">
+                      <span className="rt-dual-label">English:</span>
+                      <span className="rt-text rt-translated">{t.translatedText}</span>
+                    </div>
                   </div>
-                  <div className="rt-dual-row">
-                    <span className="rt-dual-label">English:</span>
-                    <span className="rt-text rt-translated">{t.translatedText}</span>
-                  </div>
-                </div>
-              ) : (
-                <span className="rt-text">{t.text}</span>
-              )}
-            </div>
-          ))
+                ) : (
+                  <span className="rt-text">{t.text}</span>
+                )}
+              </div>
+            ))}
+            {!autoScroll && (
+              <button
+                onClick={() => {
+                  setAutoScroll(true);
+                  if (transcriptListRef.current) {
+                    transcriptListRef.current.scrollTop = transcriptListRef.current.scrollHeight;
+                  }
+                }}
+                className="btn-scroll-bottom"
+                title="Scroll to latest message"
+              >
+                ↓ New messages
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

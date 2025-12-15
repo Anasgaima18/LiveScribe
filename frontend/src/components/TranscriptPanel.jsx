@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSocket } from '../context/SocketContext.jsx';
 import api from '../utils/api';
 import '../styles/TranscriptPanel.css';
+import '../styles/AutoScroll.css';
 
 const TranscriptPanel = ({ callId }) => {
   const [transcripts, setTranscripts] = useState([]);
@@ -9,7 +10,34 @@ const TranscriptPanel = ({ callId }) => {
   const [summary, setSummary] = useState('');
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('transcripts');
+  const [autoScroll, setAutoScroll] = useState(true);
   const socket = useSocket();
+  const transcriptListRef = useRef(null);
+  const alertListRef = useRef(null);
+
+  // Auto-scroll to bottom when new content arrives
+  useEffect(() => {
+    if (!autoScroll) return;
+    
+    const scrollToBottom = () => {
+      if (activeTab === 'transcripts' && transcriptListRef.current) {
+        transcriptListRef.current.scrollTop = transcriptListRef.current.scrollHeight;
+      } else if (activeTab === 'alerts' && alertListRef.current) {
+        alertListRef.current.scrollTop = alertListRef.current.scrollHeight;
+      }
+    };
+    
+    // Small delay to ensure DOM is updated
+    const timer = setTimeout(scrollToBottom, 100);
+    return () => clearTimeout(timer);
+  }, [transcripts, alerts, activeTab, autoScroll]);
+
+  // Detect manual scroll to disable auto-scroll
+  const handleScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+    setAutoScroll(isAtBottom);
+  };
 
   const fetchTranscripts = useCallback(async () => {
     try {
@@ -132,68 +160,101 @@ const TranscriptPanel = ({ callId }) => {
             Summary
           </button>
         </div>
+        
         <button 
           onClick={generateSummary} 
-          className="btn-summarize"
           disabled={loading || transcripts.length === 0}
+          className="btn-summarize"
         >
-          {loading ? 'Generating...' : '📝 Generate Summary'}
+          {loading ? '📝 Generating...' : '📝 Generate Summary'}
         </button>
       </div>
 
       <div className="panel-content">
         {activeTab === 'transcripts' && (
-          <div className="transcripts-list">
+          <div className="transcripts-list" ref={transcriptListRef} onScroll={handleScroll}>
             {transcripts.length === 0 ? (
               <p className="empty-message">No transcripts yet</p>
             ) : (
-              transcripts.map((transcript, index) => (
-                <div key={index} className="transcript-item">
-                  <div className="transcript-header">
-                    <strong>{transcript.userId?.name || 'Unknown'}</strong>
+              <>
+                {transcripts.map((transcript, index) => (
+                  <div key={index} className="transcript-item">
+                    <div className="transcript-header">
+                      <strong>{transcript.userId?.name || 'Unknown'}</strong>
+                    </div>
+                    <div className="transcript-segments">
+                      {transcript.segments.map((segment, idx) => (
+                        <p key={idx} className="segment">
+                          <span className="time">
+                            [{new Date(segment.timestamp).toLocaleTimeString()}]
+                          </span>
+                          {segment.text}
+                        </p>
+                      ))}
+                    </div>
                   </div>
-                  <div className="transcript-segments">
-                    {transcript.segments.map((segment, idx) => (
-                      <p key={idx} className="segment">
-                        <span className="time">
-                          [{new Date(segment.timestamp).toLocaleTimeString()}]
-                        </span>
-                        {segment.text}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              ))
+                ))}
+                {!autoScroll && (
+                  <button
+                    onClick={() => {
+                      setAutoScroll(true);
+                      if (transcriptListRef.current) {
+                        transcriptListRef.current.scrollTop = transcriptListRef.current.scrollHeight;
+                      }
+                    }}
+                    className="btn-scroll-bottom"
+                    title="Scroll to latest transcript"
+                  >
+                    ↓ New transcripts
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}
 
         {activeTab === 'alerts' && (
-          <div className="alerts-list">
+          <div className="alerts-list" ref={alertListRef} onScroll={handleScroll}>
             {alerts.length === 0 ? (
               <p className="empty-message">No alerts</p>
             ) : (
-              alerts.map((alert, index) => (
-                <div key={index} className={`alert-item severity-${alert.severity}`}>
-                  <div className="alert-header">
-                    <span className="alert-user">{alert.userId?.name}</span>
-                    <span className={`alert-badge ${alert.severity}`}>
-                      {alert.severity.toUpperCase()}
-                    </span>
+              <>
+                {alerts.map((alert, index) => (
+                  <div key={index} className={`alert-item severity-${alert.severity}`}>
+                    <div className="alert-header">
+                      <span className="alert-user">{alert.userId?.name}</span>
+                      <span className={`alert-badge ${alert.severity}`}>
+                        {alert.severity.toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="alert-details">
+                      <p className="matched-words">
+                        <strong>Flagged words:</strong> {alert.matchedWords.join(', ')}
+                      </p>
+                      <p className="context">
+                        <strong>Context:</strong> "{alert.context}"
+                      </p>
+                      <p className="timestamp">
+                        {new Date(alert.createdAt).toLocaleString()}
+                      </p>
+                    </div>
                   </div>
-                  <div className="alert-details">
-                    <p className="matched-words">
-                      <strong>Flagged words:</strong> {alert.matchedWords.join(', ')}
-                    </p>
-                    <p className="context">
-                      <strong>Context:</strong> "{alert.context}"
-                    </p>
-                    <p className="timestamp">
-                      {new Date(alert.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              ))
+                ))}
+                {!autoScroll && (
+                  <button
+                    onClick={() => {
+                      setAutoScroll(true);
+                      if (alertListRef.current) {
+                        alertListRef.current.scrollTop = alertListRef.current.scrollHeight;
+                      }
+                    }}
+                    className="btn-scroll-bottom"
+                    title="Scroll to latest alert"
+                  >
+                    ↓ New alerts
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}
