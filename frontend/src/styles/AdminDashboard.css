@@ -538,7 +538,42 @@
   font-size: 0.95rem;
 }
 
-/* Responsive */
+/* Responsive Design - Mobile First */
+
+/* iOS Safe Areas */
+@supports (padding: max(0px)) {
+  .admin-dashboard {
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
+  }
+}
+
+/* Large Desktop: 4 column stats */
+@media (max-width: 1400px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Desktop: 2 column charts */
+@media (max-width: 1200px) {
+  .analytics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Tablet Landscape: Single column charts */
+@media (max-width: 1024px) {
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .admin-header h1 {
+    font-size: 1.75rem;
+  }
+}
+
+/* Tablet Portrait: Stack everything */
 @media (max-width: 768px) {
   .admin-content {
     padding: 16px;
@@ -546,6 +581,7 @@
 
   .stats-grid {
     grid-template-columns: 1fr;
+    gap: 12px;
   }
 
   .admin-tabs {
@@ -567,6 +603,191 @@
 
   .alert-meta {
     text-align: left;
+  }
+  
+  /* Card-based table for mobile */
+  .data-table {
+    display: block;
+  }
+  
+  .data-table thead {
+    display: none;
+  }
+  
+  .data-table tbody,
+  .data-table tr {
+    display: block;
+  }
+  
+  .data-table tr {
+    margin-bottom: 16px;
+    padding: 16px;
+    background: var(--glass-bg);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--glass-border);
+  }
+  
+  .data-table td {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border: none;
+  }
+  
+  .data-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+}
+
+/* Phone Landscape */
+@media (max-width: 640px) {
+  .admin-header {
+    padding: 16px;
+  }
+  
+  .admin-header h1 {
+    font-size: 1.5rem;
+  }
+  
+  .admin-content {
+    padding: 12px;
+  }
+  
+  .stat-card {
+    padding: 16px;
+  }
+  
+  .stat-value {
+    font-size: 1.75rem;
+  }
+}
+
+/* Small Phones */
+@media (max-width: 480px) {
+  .admin-header {
+    padding: 12px;
+  }
+  
+  .admin-header h1 {
+    font-size: 1.35rem;
+  }
+  
+  .admin-tabs {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .tab-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .stat-card {
+    padding: 12px;
+  }
+  
+  .stat-value {
+    font-size: 1.5rem;
+  }
+  
+  .stat-label {
+    font-size: 0.8rem;
+  }
+  
+  .alert-card {
+    padding: 12px;
+  }
+}
+
+/* Extra Small Phones (iPhone SE) */
+@media (max-width: 375px) {
+  .admin-content {
+    padding: 8px;
+  }
+  
+  .admin-header h1 {
+    font-size: 1.25rem;
+  }
+  
+  .stat-card {
+    padding: 10px;
+  }
+  
+  .stat-value {
+    font-size: 1.35rem;
+  }
+  
+  .chart-card {
+    padding: 12px;
+  }
+}
+
+/* Large Displays (4K) */
+@media (min-width: 1920px) {
+  .stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+  }
+  
+  .admin-header h1 {
+    font-size: 2.75rem;
+  }
+  
+  .stat-value {
+    font-size: 2.75rem;
+  }
+  
+  .analytics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+  }
+}
+
+/* Landscape Mode - Low Height Screens */
+@media (max-height: 500px) and (orientation: landscape) {
+  .admin-header {
+    padding: 12px 16px;
+  }
+  
+  .admin-header h1 {
+    font-size: 1.35rem;
+  }
+  
+  .admin-content {
+    padding: 12px 16px;
+  }
+  
+  .stat-card {
+    padding: 12px;
+  }
+  
+  .stat-value {
+    font-size: 1.5rem;
+  }
+}
+
+/* Touch Device Optimization */
+@media (hover: none) and (pointer: coarse) {
+  .tab-btn {
+    min-height: 48px;
+    padding: 12px 20px;
+  }
+  
+  .btn {
+    min-height: 48px;
+    padding: 12px 24px;
+  }
+  
+  .data-table td {
+    min-height: 44px;
+  }
+  
+  /* Larger tap targets */
+  .action-btn {
+    min-width: 44px;
+    min-height: 44px;
   }
 }
 

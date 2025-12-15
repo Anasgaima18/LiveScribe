@@ -241,10 +241,30 @@
   to { transform: rotate(360deg); }
 }
 
-/* Responsive */
+/* Responsive Design - Mobile First */
+
+/* iOS Safe Areas */
+@supports (padding: max(0px)) {
+  .auth-container {
+    padding-left: max(20px, env(safe-area-inset-left));
+    padding-right: max(20px, env(safe-area-inset-right));
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+}
+
+/* Tablet Landscape */
+@media (max-width: 1024px) {
+  .auth-card {
+    max-width: 500px;
+    padding: 40px 32px;
+  }
+}
+
+/* Tablet Portrait */
 @media (max-width: 768px) {
   .auth-card {
     padding: 32px 24px;
+    max-width: 450px;
   }
 
   .auth-card h2 {
@@ -253,5 +273,155 @@
 
   .role-selection {
     flex-direction: column;
+    gap: 12px;
+  }
+  
+  .role-option {
+    width: 100%;
+  }
+}
+
+/* Phone Landscape */
+@media (max-width: 640px) {
+  .auth-container {
+    padding: 16px;
+  }
+  
+  .auth-card {
+    padding: 28px 20px;
+  }
+  
+  .auth-card h2 {
+    font-size: 1.6rem;
+  }
+  
+  .form-group label {
+    font-size: 0.9rem;
+  }
+  
+  .btn {
+    padding: 14px;
+    font-size: 0.95rem;
+  }
+}
+
+/* Small Phones */
+@media (max-width: 480px) {
+  .auth-card {
+    padding: 24px 16px;
+  }
+  
+  .auth-card h2 {
+    font-size: 1.5rem;
+  }
+  
+  .auth-card p {
+    font-size: 0.9rem;
+  }
+  
+  .form-group {
+    margin-bottom: 16px;
+  }
+  
+  .btn {
+    padding: 12px;
+  }
+  
+  .auth-footer {
+    font-size: 0.85rem;
+  }
+}
+
+/* Extra Small Phones (iPhone SE) */
+@media (max-width: 375px) {
+  .auth-container {
+    padding: 12px;
+  }
+  
+  .auth-card {
+    padding: 20px 12px;
+  }
+  
+  .auth-card h2 {
+    font-size: 1.35rem;
+  }
+  
+  .role-option {
+    padding: 12px 16px;
+  }
+}
+
+/* Large Displays (4K) */
+@media (min-width: 1920px) {
+  .auth-card {
+    max-width: 600px;
+    padding: 56px 48px;
+  }
+  
+  .auth-card h2 {
+    font-size: 2.5rem;
+  }
+  
+  .form-group label {
+    font-size: 1.1rem;
+  }
+  
+  .form-control {
+    padding: 16px;
+    font-size: 1.1rem;
+  }
+  
+  .btn {
+    padding: 18px;
+    font-size: 1.1rem;
+  }
+}
+
+/* Landscape Mode - Low Height Screens */
+@media (max-height: 600px) and (orientation: landscape) {
+  .auth-container {
+    padding: 16px;
+  }
+  
+  .auth-card {
+    padding: 20px 24px;
+  }
+  
+  .auth-card h2 {
+    font-size: 1.5rem;
+    margin-bottom: 16px;
+  }
+  
+  .form-group {
+    margin-bottom: 12px;
+  }
+  
+  .btn {
+    padding: 12px;
+  }
+}
+
+/* Touch Device Optimization */
+@media (hover: none) and (pointer: coarse) {
+  .form-control {
+    min-height: 48px;
+    padding: 14px 16px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+  
+  .btn {
+    min-height: 48px;
+    padding: 14px 24px;
+  }
+  
+  .role-option {
+    min-height: 56px;
+    padding: 16px 20px;
+  }
+  
+  /* Increase tap target size */
+  .auth-footer a {
+    padding: 8px 4px;
+    margin: 0 4px;
   }
 }

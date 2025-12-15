@@ -486,7 +486,44 @@
   animation: spin 0.8s linear infinite;
 }
 
-/* Responsive */
+/* Responsive Design - Mobile First */
+
+/* iOS Safe Areas */
+@supports (padding: max(0px)) {
+  .dashboard-container {
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
+  }
+  
+  .dashboard-header {
+    padding-top: max(20px, env(safe-area-inset-top));
+  }
+}
+
+/* Desktop: 3 column grid */
+@media (max-width: 1200px) {
+  .users-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Tablet Landscape: 2 column grid */
+@media (max-width: 900px) {
+  .dashboard-header {
+    padding: 16px;
+  }
+  
+  .dashboard-header h1 {
+    font-size: 1.75rem;
+  }
+  
+  .users-list {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+}
+
+/* Tablet Portrait: Stack header, 1 column grid */
 @media (max-width: 768px) {
   .dashboard-header {
     flex-direction: column;
@@ -505,9 +542,141 @@
 
   .users-list {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
 
   .action-buttons {
     flex-direction: column;
+    gap: 12px;
+  }
+  
+  .user-card {
+    padding: 20px;
+  }
+}
+
+/* Phone Landscape: Compact layout */
+@media (max-width: 640px) {
+  .dashboard-header h1 {
+    font-size: 1.5rem;
+  }
+  
+  .dashboard-content {
+    padding: 12px;
+  }
+  
+  .user-card {
+    padding: 16px;
+  }
+  
+  .btn {
+    padding: 12px 20px;
+    font-size: 0.9rem;
+  }
+}
+
+/* Small Phones: Very compact */
+@media (max-width: 480px) {
+  .dashboard-header {
+    padding: 12px;
+  }
+  
+  .dashboard-header h1 {
+    font-size: 1.35rem;
+  }
+  
+  .header-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .user-card h3 {
+    font-size: 1rem;
+  }
+  
+  .user-stats {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
+/* Extra Small Phones (iPhone SE) */
+@media (max-width: 375px) {
+  .dashboard-header h1 {
+    font-size: 1.25rem;
+  }
+  
+  .dashboard-content {
+    padding: 8px;
+  }
+  
+  .user-card {
+    padding: 12px;
+  }
+  
+  .btn {
+    padding: 10px 16px;
+    font-size: 0.85rem;
+  }
+}
+
+/* Large Displays (4K) */
+@media (min-width: 1920px) {
+  .users-list {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  
+  .dashboard-header h1 {
+    font-size: 2.75rem;
+  }
+  
+  .user-card {
+    padding: 32px;
+  }
+}
+
+/* Landscape Mode - Low Height Screens */
+@media (max-height: 500px) and (orientation: landscape) {
+  .dashboard-header {
+    padding: 12px 16px;
+  }
+  
+  .dashboard-header h1 {
+    font-size: 1.35rem;
+  }
+  
+  .dashboard-content {
+    padding: 12px 16px;
+  }
+  
+  .user-card {
+    padding: 16px;
+  }
+}
+
+/* Touch Device Optimization */
+@media (hover: none) and (pointer: coarse) {
+  .btn {
+    min-height: 48px;
+    padding: 12px 24px;
+  }
+  
+  .action-buttons button {
+    min-height: 48px;
+  }
+  
+  .user-card {
+    padding: 20px;
+  }
+  
+  /* Larger tap targets for mobile */
+  .btn-icon {
+    min-width: 48px;
+    min-height: 48px;
   }
 }
