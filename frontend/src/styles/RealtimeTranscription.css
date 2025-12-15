@@ -561,3 +561,211 @@
   align-items: center;
   gap: 6px;
 }
+
+/* Responsive Design - Mobile First */
+
+/* iOS Safe Areas */
+@supports (padding: max(0px)) {
+  .realtime-transcription {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+}
+
+/* Tablet Portrait */
+@media (max-width: 768px) {
+  .realtime-transcription {
+    padding: 12px;
+  }
+  
+  .rt-header {
+    gap: 10px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+  }
+  
+  .rt-header h4 {
+    font-size: 0.95rem;
+  }
+  
+  .rt-status {
+    font-size: 0.65rem;
+    padding: 4px 8px;
+  }
+  
+  .rt-select {
+    min-width: 160px;
+    font-size: 0.8rem;
+  }
+}
+
+/* Phone Landscape */
+@media (max-width: 640px) {
+  .realtime-transcription {
+    padding: 10px;
+    border-radius: 12px;
+  }
+  
+  .rt-header {
+    gap: 8px;
+  }
+  
+  .rt-header h4 {
+    font-size: 0.9rem;
+  }
+  
+  .rt-header-row {
+    flex-wrap: wrap;
+  }
+  
+  .rt-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .rt-controls-group {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+  
+  .rt-select {
+    min-width: 100%;
+    width: 100%;
+  }
+  
+  .btn-start,
+  .btn-stop {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .rt-transcript-list {
+    max-height: 220px;
+  }
+}
+
+/* Small Phones */
+@media (max-width: 480px) {
+  .realtime-transcription {
+    padding: 8px;
+  }
+  
+  .rt-header {
+    gap: 8px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+  }
+  
+  .rt-header h4 {
+    font-size: 0.85rem;
+  }
+  
+  .rt-status {
+    font-size: 0.6rem;
+    padding: 3px 7px;
+  }
+  
+  .rt-select {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+  
+  .btn-start,
+  .btn-stop {
+    padding: 8px 16px;
+    font-size: 0.85rem;
+  }
+  
+  .rt-label {
+    font-size: 0.75rem;
+  }
+  
+  .rt-transcript-list {
+    max-height: 200px;
+    padding: 12px;
+  }
+  
+  .rt-item {
+    padding: 10px;
+  }
+  
+  .rt-speaker {
+    font-size: 0.8rem;
+  }
+  
+  .rt-text {
+    font-size: 0.85rem;
+  }
+}
+
+/* Extra Small Phones (iPhone SE) */
+@media (max-width: 375px) {
+  .realtime-transcription {
+    padding: 8px;
+    border-radius: 10px;
+  }
+  
+  .rt-header h4 {
+    font-size: 0.8rem;
+  }
+  
+  .rt-status {
+    font-size: 0.55rem;
+    padding: 3px 6px;
+  }
+  
+  .rt-select {
+    padding: 6px 8px;
+    font-size: 0.7rem;
+  }
+  
+  .btn-start,
+  .btn-stop {
+    padding: 7px 14px;
+    font-size: 0.8rem;
+  }
+  
+  .rt-transcript-list {
+    max-height: 180px;
+  }
+  
+  .rt-item {
+    padding: 8px;
+  }
+}
+
+/* Landscape Mode - Low Height */
+@media (max-height: 500px) and (orientation: landscape) {
+  .realtime-transcription {
+    padding: 8px 12px;
+  }
+  
+  .rt-header {
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+  }
+  
+  .rt-transcript-list {
+    max-height: 150px;
+  }
+}
+
+/* Touch Device Optimization */
+@media (hover: none) and (pointer: coarse) {
+  .rt-select {
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+  
+  .btn-start,
+  .btn-stop {
+    min-height: 48px;
+    padding: 12px 20px;
+  }
+  
+  /* Prevent iOS zoom on input focus */
+  .rt-select {
+    font-size: 16px;
+  }
+}
